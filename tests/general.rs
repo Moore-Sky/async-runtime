@@ -1,6 +1,6 @@
 use async_runtime::{Priority, RuntimeBuilder};
 use std::num::NonZeroUsize;
-use std::sync::{Arc, Barrier, mpsc};
+use std::sync::{mpsc, Arc, Barrier};
 use std::time::Duration;
 
 fn runtime(workers: usize) -> async_runtime::Runtime {

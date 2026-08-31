@@ -7,7 +7,7 @@ error: future cannot be sent between threads safely
 10 | |     });
    | |_____^ future created by async block is not `Send`
    |
-   = help: within `{async block@$DIR/tests/ui/local_spawner_rejects_non_send_future.rs:8:27: 8:37}`, the trait `Send` is not implemented for `Rc<()>`
+   = help: within `[async block@$DIR/tests/ui/local_spawner_rejects_non_send_future.rs:8:27: 10:6]`, the trait `Send` is not implemented for `Rc<()>`
 note: captured value is not `Send`
   --> tests/ui/local_spawner_rejects_non_send_future.rs:9:14
    |

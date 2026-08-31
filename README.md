@@ -1,7 +1,7 @@
 # async-runtime
 
-`async-runtime` is a small native Rust runtime with three general-purpose
-priority queues and host-driven local domains.
+`async-runtime` is a priority-aware native Rust runtime for the smol ecosystem,
+with three general-purpose priority queues and host-driven local domains.
 
 ```rust,no_run
 use async_runtime::{Priority, RuntimeBuilder};
@@ -11,6 +11,17 @@ let runtime = RuntimeBuilder::new(NonZeroUsize::new(4).unwrap()).build()?;
 runtime.spawn(Priority::High, async { /* Send work */ })?.detach();
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
+
+## Smol ecosystem
+
+The runtime is built directly on `async-executor`, `async-task`, `async-io`,
+`async-channel`, and `futures-lite`. Futures and I/O types from these crates can
+be awaited naturally inside its tasks, so it composes with libraries designed
+for the smol ecosystem without requiring a Tokio runtime.
+
+Calling `smol::spawn` still targets smol's own global executor. Submit work
+through this crate's `Runtime` / `Spawner` when it must participate in priority
+scheduling, task accounting, or runtime shutdown.
 
 Use `Runtime` for movable `Send` work. Use one `LocalDomain` per fixed host
 thread when tasks must remain on that thread; its `LocalSpawner` accepts only
@@ -42,10 +53,26 @@ task. `shutdown_now()` cancels outstanding work.
 only `Send` spawn commands: local runnables and `!Send` data never cross a
 thread boundary.
 
-See [the minimal API example](docs/api_example.md) and
-[the Chinese README](docs/README_ZH.md).
+See [the Chinese README](README_ZH.md).
 
 ## Status
 
-The crate targets Rust 1.85+ on Windows, Linux, and macOS. It is licensed under
-either [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
+The crate uses Edition 2021 and requires Rust 1.71 or newer. Its native targets
+are Windows, Linux, macOS, Android, and iOS.
+
+CI maintains two compatibility lines: the MSRV lane uses Rust 1.71 with the
+committed, known-compatible `Cargo.lock`, while the Latest lane runs
+`cargo update` and tests the newest allowed dependencies on latest stable Rust.
+This lets releases keep using the last compatible smol ecosystem versions until
+the crate deliberately raises its MSRV.
+
+WASM is unsupported by design in v0.1. The runtime's semantics depend on a
+native multi-threaded general worker pool and message passing between execution
+domains; reducing it to single-threaded WASM would be a different runtime model.
+
+Mobile hosts remain responsible for app lifecycle and for driving a
+`LocalDomain` from the appropriate UI, render, or logic thread. The crate is
+cross-checked for ARM64 Android and iOS; CI also runs the core suite in an
+Android emulator and links the suite for an ARM64 iOS Simulator. Running it on
+iOS still requires an XCTest host app. The crate is licensed under either
+[MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.

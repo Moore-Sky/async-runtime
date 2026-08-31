@@ -15,7 +15,7 @@ use async_executor::LocalExecutor;
 use futures_lite::future::{self, FutureExt};
 
 use crate::error::{ShutdownOutcome, SpawnError};
-use crate::lifecycle::{CLOSED, Lifecycle, RUNNING};
+use crate::lifecycle::{Lifecycle, CLOSED, RUNNING};
 use crate::task::{BridgeCompletionGuard, BridgeDriver, Completion, Task};
 
 /// A thread-affine executor driven explicitly by the thread that creates it.

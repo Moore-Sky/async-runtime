@@ -1,5 +1,5 @@
 use async_runtime::{LocalDomain, Priority, RuntimeBuilder};
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 use std::num::NonZeroUsize;
 
 fn executor_costs(c: &mut Criterion) {

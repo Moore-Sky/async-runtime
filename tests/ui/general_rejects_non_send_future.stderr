@@ -7,7 +7,7 @@ error: future cannot be sent between threads safely
 12 | |     });
    | |_____^ future created by async block is not `Send`
    |
-   = help: within `{async block@$DIR/tests/ui/general_rejects_non_send_future.rs:10:45: 10:55}`, the trait `Send` is not implemented for `Rc<()>`
+   = help: within `[async block@$DIR/tests/ui/general_rejects_non_send_future.rs:10:45: 12:6]`, the trait `Send` is not implemented for `Rc<()>`
 note: captured value is not `Send`
   --> tests/ui/general_rejects_non_send_future.rs:11:14
    |
