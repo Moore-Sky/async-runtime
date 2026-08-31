@@ -1,0 +1,15 @@
+error[E0277]: `Rc<()>` cannot be sent between threads safely
+ --> tests/ui/general_rejects_non_send_result.rs:9:21
+  |
+9 |     let _ = runtime.spawn(Priority::Normal, async { Rc::new(()) });
+  |                     ^^^^^ `Rc<()>` cannot be sent between threads safely
+  |
+  = help: the trait `Send` is not implemented for `Rc<()>`
+note: required by a bound in `Runtime::spawn`
+ --> src/runtime.rs
+  |
+  |     pub fn spawn<F, T>(&self, priority: Priority, future: F) -> Result<Task<T>, SpawnError>
+  |            ----- required by a bound in this associated function
+...
+  |         T: Send + 'static,
+  |            ^^^^ required by this bound in `Runtime::spawn`

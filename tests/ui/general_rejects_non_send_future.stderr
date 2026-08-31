@@ -1,0 +1,23 @@
+error: future cannot be sent between threads safely
+  --> tests/ui/general_rejects_non_send_future.rs:10:45
+   |
+10 |       let _ = runtime.spawn(Priority::Normal, async move {
+   |  _____________________________________________^
+11 | |         drop(captured);
+12 | |     });
+   | |_____^ future created by async block is not `Send`
+   |
+   = help: within `{async block@$DIR/tests/ui/general_rejects_non_send_future.rs:10:45: 10:55}`, the trait `Send` is not implemented for `Rc<()>`
+note: captured value is not `Send`
+  --> tests/ui/general_rejects_non_send_future.rs:11:14
+   |
+11 |         drop(captured);
+   |              ^^^^^^^^ has type `Rc<()>` which is not `Send`
+note: required by a bound in `Runtime::spawn`
+  --> src/runtime.rs
+   |
+   |     pub fn spawn<F, T>(&self, priority: Priority, future: F) -> Result<Task<T>, SpawnError>
+   |            ----- required by a bound in this associated function
+   |     where
+   |         F: Future<Output = T> + Send + 'static,
+   |                                 ^^^^ required by this bound in `Runtime::spawn`
