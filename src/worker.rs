@@ -40,9 +40,9 @@ pub(crate) fn run(state: &RuntimeState, shutdown: &Receiver<()>, weights: Priori
         if tick_selected(state, &mut selector) {
             continue;
         }
-        // Cancellation of the losing tick futures unregisters their sleepers. async_io drives
-        // the reactor too; the runtime intentionally owns no park/unpark mechanism.
-        async_io::block_on(future::race(
+        // The runtime owns no I/O reactor. It blocks only on executor wakes and
+        // its shutdown channel; external I/O runtimes remain host-owned.
+        future::block_on(future::race(
             future::race(state.high.tick(), state.normal.tick()),
             future::race(state.background.tick(), async {
                 let _ = shutdown.recv().await;

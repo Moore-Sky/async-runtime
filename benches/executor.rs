@@ -1,5 +1,6 @@
 use async_runtime::{LocalDomain, Priority, RuntimeBuilder};
 use criterion::{criterion_group, criterion_main, Criterion};
+use futures_lite::future;
 use std::num::NonZeroUsize;
 
 fn executor_costs(c: &mut Criterion) {
@@ -12,7 +13,7 @@ fn executor_costs(c: &mut Criterion) {
             let task = runtime
                 .spawn(Priority::Normal, async { 1_u8 })
                 .expect("spawn");
-            std::hint::black_box(async_io::block_on(task));
+            std::hint::black_box(future::block_on(task));
         });
     });
 
@@ -21,7 +22,7 @@ fn executor_costs(c: &mut Criterion) {
             let tasks = [Priority::High, Priority::Normal, Priority::Background]
                 .map(|priority| runtime.spawn(priority, async {}).expect("spawn"));
             for task in tasks {
-                async_io::block_on(task);
+                future::block_on(task);
             }
         });
     });
@@ -32,7 +33,7 @@ fn executor_costs(c: &mut Criterion) {
     c.bench_function("local/spawn-and-drive", |b| {
         b.iter(|| {
             let task = local.spawn_local(async { 1_u8 }).expect("local spawn");
-            std::hint::black_box(async_io::block_on(local.run(task)));
+            std::hint::black_box(future::block_on(local.run(task)));
         });
     });
 
@@ -40,10 +41,10 @@ fn executor_costs(c: &mut Criterion) {
     c.bench_function("local/remote-inbox", |b| {
         b.iter(|| {
             let task = remote.spawn(async { 1_u8 }).expect("remote spawn");
-            std::hint::black_box(async_io::block_on(local.run(task)));
+            std::hint::black_box(future::block_on(local.run(task)));
         });
     });
-    async_io::block_on(local.shutdown_graceful());
+    future::block_on(local.shutdown_graceful());
 }
 
 criterion_group!(benches, executor_costs);

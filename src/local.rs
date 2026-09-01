@@ -8,7 +8,6 @@ use std::panic::AssertUnwindSafe;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak};
-use std::time::Duration;
 
 use async_channel::{Receiver, Sender};
 use async_executor::LocalExecutor;
@@ -203,8 +202,14 @@ impl LocalDomain {
         self.cancel_inbox();
     }
 
-    /// Gracefully drains until `timeout`, then cancels any remaining work.
-    pub async fn shutdown_timeout(mut self, timeout: Duration) -> ShutdownOutcome {
+    /// Gracefully drains until `deadline` resolves, then cancels remaining work.
+    ///
+    /// The deadline future is supplied by the host, so this executor does not
+    /// require or drive a particular timer or I/O reactor.
+    pub async fn shutdown_until<D>(mut self, deadline: D) -> ShutdownOutcome
+    where
+        D: Future,
+    {
         self.begin_close();
         let drained = async {
             while self.shared.accepted_tasks.load(Ordering::Acquire) != 0 {
@@ -217,7 +222,7 @@ impl LocalDomain {
                 true
             },
             async {
-                async_io::Timer::after(timeout).await;
+                deadline.await;
                 false
             },
         )

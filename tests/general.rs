@@ -1,4 +1,5 @@
 use async_runtime::{Priority, RuntimeBuilder};
+use futures_lite::future;
 use std::num::NonZeroUsize;
 use std::sync::{mpsc, Arc, Barrier};
 use std::time::Duration;
@@ -55,7 +56,7 @@ fn supports_nested_spawn_and_await() {
         })
         .unwrap();
 
-    assert_eq!(async_io::block_on(task), 42);
+    assert_eq!(future::block_on(task), 42);
     runtime.shutdown_graceful().unwrap();
 }
 

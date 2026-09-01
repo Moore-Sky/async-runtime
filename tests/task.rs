@@ -1,4 +1,5 @@
 use async_runtime::{Priority, RuntimeBuilder};
+use futures_lite::future;
 use std::num::NonZeroUsize;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -13,7 +14,7 @@ fn runtime() -> async_runtime::Runtime {
 fn await_returns_value() {
     let runtime = runtime();
     let task = runtime.spawn(Priority::Normal, async { 7 }).unwrap();
-    assert_eq!(async_io::block_on(task), 7);
+    assert_eq!(future::block_on(task), 7);
     runtime.shutdown_graceful().unwrap();
 }
 
@@ -26,7 +27,7 @@ fn is_finished_is_false_for_pending_task() {
         })
         .unwrap();
     assert!(!task.is_finished());
-    assert_eq!(async_io::block_on(task.cancel()), None);
+    assert_eq!(future::block_on(task.cancel()), None);
     runtime.shutdown_graceful().unwrap();
 }
 
@@ -65,7 +66,7 @@ fn explicit_cancel_returns_none_for_pending_task() {
             std::future::pending::<u8>().await
         })
         .unwrap();
-    assert_eq!(async_io::block_on(task.cancel()), None);
+    assert_eq!(future::block_on(task.cancel()), None);
     runtime.shutdown_graceful().unwrap();
 }
 
@@ -73,7 +74,7 @@ fn explicit_cancel_returns_none_for_pending_task() {
 fn fallible_returns_some_for_completed_task() {
     let runtime = runtime();
     let task = runtime.spawn(Priority::Normal, async { 42_u8 }).unwrap();
-    assert_eq!(async_io::block_on(task.fallible()), Some(42));
+    assert_eq!(future::block_on(task.fallible()), Some(42));
     runtime.shutdown_graceful().unwrap();
 }
 
@@ -85,8 +86,7 @@ fn ordinary_await_panics_after_runtime_cancellation() {
         .unwrap();
     runtime.shutdown_now().unwrap();
 
-    let result =
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async_io::block_on(task)));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| future::block_on(task)));
     assert!(result.is_err());
 }
 
@@ -96,12 +96,11 @@ fn panic_reaches_awaiter_but_worker_survives() {
     let panicking = runtime
         .spawn(Priority::Normal, async { panic!("expected task panic") })
         .unwrap();
-    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        async_io::block_on(panicking)
-    }));
+    let panic =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| future::block_on(panicking)));
     assert!(panic.is_err());
 
     let healthy = runtime.spawn(Priority::Normal, async { 42 }).unwrap();
-    assert_eq!(async_io::block_on(healthy), 42);
+    assert_eq!(future::block_on(healthy), 42);
     runtime.shutdown_graceful().unwrap();
 }

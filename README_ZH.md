@@ -14,9 +14,9 @@ runtime.spawn(Priority::High, async { /* Send 任务 */ })?.detach();
 
 ## Smol 生态
 
-运行时直接构建于 `async-executor`、`async-task`、`async-io`、`async-channel` 和
-`futures-lite`。这些 crate 提供的 future、channel 与异步 I/O 类型可以直接在任务中
-await，因此能够自然配合面向 smol 生态的库使用，不要求 Tokio runtime。
+运行时直接构建于 `async-executor`、`async-task`、`async-channel` 和 `futures-lite`。
+它只调度 future，不拥有或驱动 I/O reactor。应用负责驱动自己选择的 I/O runtime；宿主
+驱动 `async-io` 时，其 I/O future 可以自然地在本运行时任务中 await。
 
 需要注意，调用 `smol::spawn` 仍会提交到 smol 自己的全局 executor。需要参与本 crate 的
 优先级调度、任务计数或 shutdown 时，应通过 `Runtime` / `Spawner` 提交。
@@ -34,8 +34,8 @@ await，因此能够自然配合面向 smol 生态的库使用，不要求 Tokio
 queue 与 work stealing 优化。这是有意的正确性和语义优先取舍；基准结果将决定以后是否基于
 `async-task` 改为自定义调度器。
 
-worker 由 `async_io::block_on` 驱动，运行时不自行实现 worker 的 park/unpark；空闲等待统一
-交由 async future 和 `async-io` 的 I/O wake 机制处理。
+worker 使用 `futures_lite::future::block_on` 等待 executor 与 shutdown future。运行时既不
+实现 I/O reactor，也不要求宿主选择特定 I/O runtime。
 
 ## 关闭与线程安全
 

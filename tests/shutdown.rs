@@ -1,4 +1,5 @@
 use async_runtime::{Priority, RuntimeBuilder, ShutdownError, ShutdownOutcome, SpawnError};
+use futures_lite::future;
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Barrier};
@@ -14,13 +15,18 @@ fn runtime(workers: usize) -> async_runtime::Runtime {
 fn graceful_waits_for_accepted_detached_tasks() {
     let runtime = runtime(1);
     let (tx, rx) = mpsc::channel();
+    let (release_tx, release_rx) = async_channel::bounded::<()>(1);
     runtime
         .spawn(Priority::Normal, async move {
-            async_io::Timer::after(Duration::from_millis(30)).await;
+            release_rx.recv().await.unwrap();
             tx.send(()).unwrap();
         })
         .unwrap()
         .detach();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(30));
+        release_tx.send_blocking(()).unwrap();
+    });
 
     runtime.shutdown_graceful().unwrap();
     rx.recv_timeout(Duration::from_millis(1))
@@ -54,7 +60,7 @@ fn shutdown_now_cancels_task_and_old_spawner_is_closed() {
         })
         .unwrap();
     runtime.shutdown_now().unwrap();
-    assert_eq!(async_io::block_on(pending.fallible()), None);
+    assert_eq!(future::block_on(pending.fallible()), None);
     assert!(matches!(
         spawner.spawn(Priority::Normal, async {}),
         Err(SpawnError::Closed)
@@ -147,16 +153,21 @@ fn concurrent_spawn_and_graceful_close_drains_every_success() {
 fn stale_drain_notification_does_not_finish_a_later_graceful_shutdown() {
     let runtime = runtime(1);
     let first = runtime.spawn(Priority::Normal, async {}).unwrap();
-    async_io::block_on(first);
+    future::block_on(first);
 
     let (done_tx, done_rx) = mpsc::channel();
+    let (release_tx, release_rx) = async_channel::bounded::<()>(1);
     runtime
         .spawn(Priority::Normal, async move {
-            async_io::Timer::after(Duration::from_millis(20)).await;
+            release_rx.recv().await.unwrap();
             done_tx.send(()).unwrap();
         })
         .unwrap()
         .detach();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(20));
+        release_tx.send_blocking(()).unwrap();
+    });
 
     runtime.shutdown_graceful().unwrap();
     done_rx

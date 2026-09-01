@@ -1,11 +1,12 @@
 use async_runtime::{Priority, RuntimeBuilder};
+use futures_lite::future;
 use std::net::{TcpListener, TcpStream};
 use std::num::NonZeroUsize;
 use std::sync::mpsc;
 use std::time::Duration;
 
 #[test]
-fn idle_workers_wake_for_timer() {
+fn external_async_io_timer_wakes_idle_worker() {
     let runtime = RuntimeBuilder::new(NonZeroUsize::new(1).unwrap())
         .build()
         .unwrap();
@@ -22,7 +23,7 @@ fn idle_workers_wake_for_timer() {
 }
 
 #[test]
-fn idle_workers_wake_for_async_channel() {
+fn external_async_channel_wakes_idle_worker() {
     let runtime = RuntimeBuilder::new(NonZeroUsize::new(1).unwrap())
         .build()
         .unwrap();
@@ -36,12 +37,12 @@ fn idle_workers_wake_for_async_channel() {
 
     std::thread::sleep(Duration::from_millis(20));
     wake_tx.send_blocking(42_u8).unwrap();
-    assert_eq!(async_io::block_on(task), 42);
+    assert_eq!(future::block_on(task), 42);
     runtime.shutdown_graceful().unwrap();
 }
 
 #[test]
-fn idle_workers_wake_for_loopback_io() {
+fn host_driven_async_io_composes_with_runtime_tasks() {
     let runtime = RuntimeBuilder::new(NonZeroUsize::new(1).unwrap())
         .build()
         .unwrap();

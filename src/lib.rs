@@ -4,9 +4,10 @@
 
 //! A priority-aware native async runtime for the smol ecosystem.
 //!
-//! It is built on `async-executor`, `async-task`, `async-io`, `async-channel`,
-//! and `futures-lite`. [`Runtime`] owns a general-purpose worker pool.
-//! [`LocalDomain`] is driven by its host thread and can run `!Send` futures.
+//! It is built on `async-executor`, `async-task`, `async-channel`, and
+//! `futures-lite`. It does not own or drive an I/O reactor. [`Runtime`] owns a
+//! general-purpose worker pool. [`LocalDomain`] is driven by its host thread
+//! and can run `!Send` futures.
 
 mod error;
 mod lifecycle;

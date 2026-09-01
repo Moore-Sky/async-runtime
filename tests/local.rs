@@ -1,4 +1,5 @@
 use async_runtime::{LocalDomain, ShutdownOutcome};
+use futures_lite::future;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::mpsc;
@@ -22,9 +23,9 @@ fn spawn_local_accepts_rc_and_polls_on_owner_thread() {
         })
         .unwrap();
 
-    assert_eq!(async_io::block_on(local.run(task)), 42);
+    assert_eq!(future::block_on(local.run(task)), 42);
     assert_eq!(polls.get(), 1);
-    async_io::block_on(local.shutdown_graceful());
+    future::block_on(local.shutdown_graceful());
 }
 
 #[test]
@@ -43,7 +44,7 @@ fn remote_spawner_delivers_send_future_to_owner_driver() {
     .unwrap();
 
     // The owner is responsible for driving received commands as well as local work.
-    let executed_on = async_io::block_on(async {
+    let executed_on = future::block_on(async {
         loop {
             match done_rx.try_recv() {
                 Ok(thread_id) => break thread_id,
@@ -53,7 +54,7 @@ fn remote_spawner_delivers_send_future_to_owner_driver() {
         }
     });
     assert_eq!(executed_on, std::thread::current().id());
-    async_io::block_on(local.shutdown_graceful());
+    future::block_on(local.shutdown_graceful());
 }
 
 #[test]
@@ -69,12 +70,12 @@ fn remote_local_panic_is_not_reported_as_cancellation() {
     .unwrap();
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        async_io::block_on(local.run(task))
+        future::block_on(local.run(task))
     }));
     let payload = result.expect_err("the original task panic must be rethrown");
     let message = payload.downcast_ref::<&str>().copied().unwrap_or_default();
     assert_eq!(message, "remote local panic payload");
-    async_io::block_on(local.shutdown_graceful());
+    future::block_on(local.shutdown_graceful());
 }
 
 #[test]
@@ -91,10 +92,10 @@ fn remote_local_fallible_task_still_propagates_panic() {
     .unwrap();
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        async_io::block_on(local.run(task))
+        future::block_on(local.run(task))
     }));
     assert!(result.is_err());
-    async_io::block_on(local.shutdown_graceful());
+    future::block_on(local.shutdown_graceful());
 }
 
 #[test]
@@ -110,9 +111,9 @@ fn run_accepts_a_future_borrowing_from_the_owner_stack() {
     let local = LocalDomain::new();
     let value = String::from("borrowed");
 
-    let observed = async_io::block_on(local.run(async { value.as_str() }));
+    let observed = future::block_on(local.run(async { value.as_str() }));
     assert_eq!(observed, "borrowed");
-    async_io::block_on(local.shutdown_graceful());
+    future::block_on(local.shutdown_graceful());
 }
 
 #[test]
@@ -126,7 +127,7 @@ fn graceful_materializes_commands_accepted_before_closing() {
         .unwrap()
         .detach();
 
-    async_io::block_on(local.shutdown_graceful());
+    future::block_on(local.shutdown_graceful());
     assert_eq!(done_rx.recv().unwrap(), 42);
 }
 
@@ -138,12 +139,14 @@ fn local_timeout_reports_and_cancels_remaining_work() {
         .unwrap()
         .fallible();
 
-    let outcome = async_io::block_on(local.shutdown_timeout(std::time::Duration::from_millis(20)));
+    let outcome = async_io::block_on(
+        local.shutdown_until(async_io::Timer::after(std::time::Duration::from_millis(20))),
+    );
     assert!(matches!(
         outcome,
         ShutdownOutcome::TimedOut { remaining_tasks: 1 }
     ));
-    assert_eq!(async_io::block_on(task), None);
+    assert_eq!(future::block_on(task), None);
 }
 
 #[test]
@@ -153,7 +156,9 @@ fn dropped_remote_handle_is_cancelled_before_materialization() {
     drop(task);
 
     assert_eq!(
-        async_io::block_on(local.shutdown_timeout(std::time::Duration::from_secs(1),)),
+        async_io::block_on(
+            local.shutdown_until(async_io::Timer::after(std::time::Duration::from_secs(1))),
+        ),
         ShutdownOutcome::Completed
     );
 }
@@ -176,7 +181,7 @@ fn a_busy_remote_inbox_does_not_starve_local_runnables() {
     local_rx
         .try_recv()
         .expect("processing an inbox command must also give local work an opportunity");
-    async_io::block_on(local.shutdown_graceful());
+    future::block_on(local.shutdown_graceful());
 }
 
 #[test]

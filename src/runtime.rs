@@ -2,14 +2,13 @@ use crate::error::{ShutdownError, ShutdownOutcome, SpawnError};
 use crate::priority::{Priority, PriorityWeights};
 use crate::task::Task;
 use crate::worker;
-use async_channel::{Receiver, Sender};
+use async_channel::Sender;
 use async_executor::Executor;
-use futures_lite::future;
 use std::future::Future;
 use std::io;
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::thread::{self, JoinHandle, ThreadId};
 use std::time::Duration;
 
@@ -40,7 +39,6 @@ impl RuntimeBuilder {
     /// created earlier in the same build attempt are stopped and joined.
     pub fn build(self) -> io::Result<Runtime> {
         let (shutdown_tx, shutdown_rx) = async_channel::unbounded();
-        let (drained_tx, drained_rx) = async_channel::bounded(1);
         let state = Arc::new(RuntimeState {
             high: Executor::new(),
             normal: Executor::new(),
@@ -49,8 +47,8 @@ impl RuntimeBuilder {
             accepted_tasks: AtomicUsize::new(0),
             stopping: AtomicBool::new(false),
             shutdown_tx,
-            drained_tx,
-            drained_rx,
+            drain_lock: Mutex::new(()),
+            drained: Condvar::new(),
             worker_ids: Mutex::new(Vec::with_capacity(self.worker_threads.get())),
             worker_count: self.worker_threads.get(),
         });
@@ -254,8 +252,8 @@ pub(crate) struct RuntimeState {
     pub(crate) accepted_tasks: AtomicUsize,
     pub(crate) stopping: AtomicBool,
     shutdown_tx: Sender<()>,
-    drained_tx: Sender<()>,
-    drained_rx: Receiver<()>,
+    drain_lock: Mutex<()>,
+    drained: Condvar,
     worker_ids: Mutex<Vec<ThreadId>>,
     worker_count: usize,
 }
@@ -319,35 +317,29 @@ impl RuntimeState {
         }
     }
     fn wait_for_drain(&self) {
-        async_io::block_on(async {
-            while self.accepted_tasks.load(Ordering::Acquire) != 0 {
-                let _ = self.drained_rx.recv().await;
-            }
-        });
+        let guard = self.drain_lock.lock().expect("runtime drain lock poisoned");
+        drop(
+            self.drained
+                .wait_while(guard, |()| self.accepted_tasks.load(Ordering::Acquire) != 0)
+                .expect("runtime drain lock poisoned"),
+        );
     }
     fn wait_for_drain_timeout(&self, timeout: Duration) -> bool {
-        async_io::block_on(async {
-            if self.accepted_tasks.load(Ordering::Acquire) == 0 {
-                return true;
-            }
-            future::race(
-                async {
-                    while self.accepted_tasks.load(Ordering::Acquire) != 0 {
-                        let _ = self.drained_rx.recv().await;
-                    }
-                    true
-                },
-                async {
-                    async_io::Timer::after(timeout).await;
-                    false
-                },
-            )
-            .await
-        })
+        let guard = self.drain_lock.lock().expect("runtime drain lock poisoned");
+        let (guard, _) = self
+            .drained
+            .wait_timeout_while(guard, timeout, |()| {
+                self.accepted_tasks.load(Ordering::Acquire) != 0
+            })
+            .expect("runtime drain lock poisoned");
+        let drained = self.accepted_tasks.load(Ordering::Acquire) == 0;
+        drop(guard);
+        drained
     }
     fn complete_task(&self) {
+        let _guard = self.drain_lock.lock().expect("runtime drain lock poisoned");
         if self.accepted_tasks.fetch_sub(1, Ordering::AcqRel) == 1 {
-            let _ = self.drained_tx.try_send(());
+            self.drained.notify_all();
         }
     }
 }

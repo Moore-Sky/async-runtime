@@ -14,10 +14,11 @@ runtime.spawn(Priority::High, async { /* Send work */ })?.detach();
 
 ## Smol ecosystem
 
-The runtime is built directly on `async-executor`, `async-task`, `async-io`,
-`async-channel`, and `futures-lite`. Futures and I/O types from these crates can
-be awaited naturally inside its tasks, so it composes with libraries designed
-for the smol ecosystem without requiring a Tokio runtime.
+The runtime is built directly on `async-executor`, `async-task`,
+`async-channel`, and `futures-lite`. It schedules futures but does not own or
+drive an I/O reactor. Applications remain responsible for driving their chosen
+I/O runtime; `async-io` futures compose naturally when the host drives
+`async-io`.
 
 Calling `smol::spawn` still targets smol's own global executor. Submit work
 through this crate's `Runtime` / `Spawner` when it must participate in priority
@@ -39,9 +40,9 @@ and does not use `Executor::run()`'s per-runner local queues or work stealing.
 This is an intentional correctness-first trade-off; benchmarks determine
 whether a later custom `async-task` scheduler is warranted.
 
-Workers are driven by async futures through `async_io::block_on`; the runtime
-does not implement its own park/unpark mechanism. This lets async I/O wakes
-participate in idle waiting.
+Workers wait on executor and shutdown futures through
+`futures_lite::future::block_on`. The runtime does not implement an I/O reactor
+or prescribe one to the host.
 
 ## Lifecycle
 

@@ -1,4 +1,5 @@
 use async_runtime::{LocalDomain, Priority, RuntimeBuilder};
+use futures_lite::future;
 use std::num::NonZeroUsize;
 
 #[test]
@@ -14,9 +15,9 @@ fn general_task_can_submit_to_local_and_await_completion() {
             local_spawner.spawn(async { 42_u32 }).unwrap().await
         })
         .unwrap();
-    assert_eq!(async_io::block_on(local.run(task)), 42);
+    assert_eq!(future::block_on(local.run(task)), 42);
 
-    async_io::block_on(local.shutdown_graceful());
+    future::block_on(local.shutdown_graceful());
     runtime.shutdown_graceful().unwrap();
 }
 
@@ -39,8 +40,8 @@ fn local_task_can_submit_to_general_and_returns_to_owner() {
             value
         })
         .unwrap();
-    assert_eq!(async_io::block_on(local.run(task)), 42);
+    assert_eq!(future::block_on(local.run(task)), 42);
 
-    async_io::block_on(local.shutdown_graceful());
+    future::block_on(local.shutdown_graceful());
     runtime.shutdown_graceful().unwrap();
 }

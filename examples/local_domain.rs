@@ -1,6 +1,7 @@
 //! A host-driven local domain for thread-affine work.
 
 use async_runtime::LocalDomain;
+use futures_lite::future;
 use std::cell::Cell;
 use std::rc::Rc;
 
@@ -19,5 +20,5 @@ fn main() {
     while local_rt.try_tick() {}
     assert_eq!(state.get(), 1);
 
-    async_io::block_on(local_rt.shutdown_graceful());
+    future::block_on(local_rt.shutdown_graceful());
 }
