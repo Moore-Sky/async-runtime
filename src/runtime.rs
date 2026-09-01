@@ -1,13 +1,13 @@
 use crate::error::{ShutdownError, ShutdownOutcome, SpawnError};
 use crate::priority::{Priority, PriorityWeights};
+use crate::scheduler::Scheduler;
 use crate::task::Task;
 use crate::worker;
-use async_channel::Sender;
-use async_executor::Executor;
+use async_task::Builder as TaskBuilder;
 use std::future::Future;
 use std::io;
 use std::num::NonZeroUsize;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::thread::{self, JoinHandle, ThreadId};
 use std::time::Duration;
@@ -38,27 +38,21 @@ impl RuntimeBuilder {
     /// Returns an I/O error if any worker thread cannot be created. Workers
     /// created earlier in the same build attempt are stopped and joined.
     pub fn build(self) -> io::Result<Runtime> {
-        let (shutdown_tx, shutdown_rx) = async_channel::unbounded();
+        let (scheduler, worker_queues) = Scheduler::new(self.worker_threads.get());
         let state = Arc::new(RuntimeState {
-            high: Executor::new(),
-            normal: Executor::new(),
-            background: Executor::new(),
+            scheduler,
             gate: Mutex::new(Gate::Running),
             accepted_tasks: AtomicUsize::new(0),
-            stopping: AtomicBool::new(false),
-            shutdown_tx,
             drain_lock: Mutex::new(()),
             drained: Condvar::new(),
             worker_ids: Mutex::new(Vec::with_capacity(self.worker_threads.get())),
-            worker_count: self.worker_threads.get(),
         });
         let mut workers = Vec::with_capacity(self.worker_threads.get());
-        for number in 0..self.worker_threads.get() {
+        for (number, queues) in worker_queues.into_iter().enumerate() {
             let worker_state = Arc::clone(&state);
-            let receiver = shutdown_rx.clone();
             match thread::Builder::new()
                 .name(format!("async-runtime-{number}"))
-                .spawn(move || worker::run(&worker_state, &receiver, self.weights))
+                .spawn(move || worker::run(&worker_state, number, queues, self.weights))
             {
                 Ok(handle) => workers.push(handle),
                 Err(error) => {
@@ -102,6 +96,12 @@ impl Runtime {
         T: Send + 'static,
     {
         self.state.spawn(priority, future)
+    }
+
+    /// Returns a relaxed snapshot of scheduler observability counters.
+    #[cfg(feature = "stats")]
+    pub fn stats(&self) -> crate::RuntimeStats {
+        self.state.scheduler.stats()
     }
     /// Rejects new tasks, drains every accepted task, and joins all workers.
     ///
@@ -245,17 +245,12 @@ enum Gate {
 
 /// Shared worker state. Its gate serializes task acceptance with transition to closing.
 pub(crate) struct RuntimeState {
-    pub(crate) high: Executor<'static>,
-    pub(crate) normal: Executor<'static>,
-    pub(crate) background: Executor<'static>,
+    pub(crate) scheduler: Arc<Scheduler>,
     gate: Mutex<Gate>,
     pub(crate) accepted_tasks: AtomicUsize,
-    pub(crate) stopping: AtomicBool,
-    shutdown_tx: Sender<()>,
     drain_lock: Mutex<()>,
     drained: Condvar,
     worker_ids: Mutex<Vec<ThreadId>>,
-    worker_count: usize,
 }
 
 impl RuntimeState {
@@ -270,8 +265,8 @@ impl RuntimeState {
         }
         self.accepted_tasks.fetch_add(1, Ordering::AcqRel);
         let completion = CompletionGuard {
-            // Tasks are owned by an executor inside this state. Keeping only a weak
-            // reference here is essential: a queued task must not keep the executor
+            // Tasks are owned by the scheduler inside this state. Keeping only a weak
+            // reference here is essential: a queued task must not keep the scheduler
             // (and therefore itself) alive during shutdown_now or Runtime::drop.
             state: Arc::downgrade(self),
         };
@@ -279,12 +274,21 @@ impl RuntimeState {
             let _completion = completion;
             future.await
         };
-        // A successful return means the runtime owns the queued task or its cancellation cleanup.
-        let task = match priority {
-            Priority::High => self.high.spawn(tracked),
-            Priority::Normal => self.normal.spawn(tracked),
-            Priority::Background => self.background.spawn(tracked),
+        let scheduler = Arc::downgrade(&self.scheduler);
+        let schedule = move |runnable| {
+            if let Some(scheduler) = scheduler.upgrade() {
+                scheduler.schedule(priority, runnable);
+            }
         };
+        let (runnable, task) = TaskBuilder::new()
+            .propagate_panic(true)
+            .spawn(|()| tracked, schedule);
+        self.scheduler
+            .record_spawn(self.scheduler.is_current_worker());
+        // A successful return means the runtime owns the queued task or its
+        // cancellation cleanup. Initial scheduling follows the same local vs
+        // global routing rule as every later wake.
+        runnable.schedule();
         drop(gate);
         Ok(Task::direct(task))
     }
@@ -310,11 +314,7 @@ impl RuntimeState {
         *self.gate.lock().expect("runtime lifecycle gate poisoned") = Gate::Closed;
     }
     pub(crate) fn request_stop(&self) {
-        if !self.stopping.swap(true, Ordering::AcqRel) {
-            for _ in 0..self.worker_count {
-                let _ = self.shutdown_tx.try_send(());
-            }
-        }
+        self.scheduler.stop();
     }
     fn wait_for_drain(&self) {
         let guard = self.drain_lock.lock().expect("runtime drain lock poisoned");

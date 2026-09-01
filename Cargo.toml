@@ -1,6 +1,6 @@
 [package]
 name = "async-runtime"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.71"
 license = "Apache-2.0 OR MIT"
@@ -9,12 +9,18 @@ readme = "README.md"
 documentation = "https://docs.rs/async-runtime"
 keywords = ["async", "executor", "runtime", "priority", "smol"]
 categories = ["asynchronous", "concurrency"]
+exclude = ["改进计划.md"]
 
 [dependencies]
 async-channel = "2.5"
 async-executor = "1.14"
 async-task = "4.7"
+crossbeam-deque = "0.8.7"
 futures-lite = "2.6"
+
+[features]
+default = []
+stats = []
 
 [dev-dependencies]
 async-io = "2.6"
@@ -47,4 +53,33 @@ harness = false
 
 [[bench]]
 name = "yield_storm"
+harness = false
+
+[[bench]]
+name = "v030_nested_locality"
+harness = false
+
+[[bench]]
+name = "v030_external_producers"
+harness = false
+
+[[bench]]
+name = "v030_steal_imbalance"
+harness = false
+
+[[bench]]
+name = "v030_priority_latency"
+harness = false
+
+[[bench]]
+name = "v030_starvation"
+harness = false
+
+[[bench]]
+name = "v030_idle_wake"
+harness = false
+required-features = ["stats"]
+
+[[bench]]
+name = "v030_yield_wake_storm"
 harness = false

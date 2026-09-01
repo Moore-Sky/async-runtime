@@ -1,8 +1,6 @@
 use crate::priority::{Priority, PriorityWeights};
 use crate::runtime::RuntimeState;
-use async_channel::Receiver;
-use futures_lite::future;
-use std::sync::atomic::Ordering;
+use crate::scheduler::WorkerQueues;
 
 /// Per-worker weighted scheduling opportunities, not a completed-work ratio.
 pub(crate) struct WeightedSelector {
@@ -33,41 +31,41 @@ impl WeightedSelector {
     }
 }
 
-pub(crate) fn run(state: &RuntimeState, shutdown: &Receiver<()>, weights: PriorityWeights) {
+pub(crate) fn run(
+    state: &RuntimeState,
+    worker_index: usize,
+    queues: WorkerQueues,
+    weights: PriorityWeights,
+) {
     state.register_worker(std::thread::current().id());
+    state.scheduler.enter_worker(worker_index, queues);
     let mut selector = WeightedSelector::new(weights);
-    while !state.stopping.load(Ordering::Acquire) {
-        if tick_selected(state, &mut selector) {
-            continue;
+    while !state.scheduler.is_stopping() {
+        if let Some(runnable) = take_selected(state, &mut selector) {
+            state.scheduler.record_executed();
+            let _ = runnable.run();
+        } else {
+            state.scheduler.park(worker_index);
         }
-        // The runtime owns no I/O reactor. It blocks only on executor wakes and
-        // its shutdown channel; external I/O runtimes remain host-owned.
-        future::block_on(future::race(
-            future::race(state.high.tick(), state.normal.tick()),
-            future::race(state.background.tick(), async {
-                let _ = shutdown.recv().await;
-            }),
-        ));
     }
+    state.scheduler.leave_worker();
 }
 
-fn tick_selected(state: &RuntimeState, selector: &mut WeightedSelector) -> bool {
+fn take_selected(
+    state: &RuntimeState,
+    selector: &mut WeightedSelector,
+) -> Option<async_task::Runnable> {
     let first = selector.next();
     for priority in [
         first,
         next_priority(first),
         next_priority(next_priority(first)),
     ] {
-        let ran = match priority {
-            Priority::High => state.high.try_tick(),
-            Priority::Normal => state.normal.try_tick(),
-            Priority::Background => state.background.try_tick(),
-        };
-        if ran {
-            return true;
+        if let Some(runnable) = state.scheduler.take(priority) {
+            return Some(runnable);
         }
     }
-    false
+    None
 }
 fn next_priority(priority: Priority) -> Priority {
     match priority {

@@ -1,6 +1,7 @@
 use async_runtime::{Priority, RuntimeBuilder};
 use futures_lite::future;
 use std::num::NonZeroUsize;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Barrier};
 use std::time::Duration;
 
@@ -81,5 +82,42 @@ fn distinct_priority_queues_all_make_progress() {
     assert!(seen.contains(&Priority::High));
     assert!(seen.contains(&Priority::Normal));
     assert!(seen.contains(&Priority::Background));
+    runtime.shutdown_graceful().unwrap();
+}
+
+#[test]
+fn external_task_is_not_starved_by_same_priority_local_requeues() {
+    let runtime = runtime(1);
+    let stop = Arc::new(AtomicBool::new(false));
+    let polls = Arc::new(AtomicUsize::new(0));
+    let spinner = runtime
+        .spawn(Priority::High, {
+            let stop = Arc::clone(&stop);
+            let polls = Arc::clone(&polls);
+            async move {
+                while !stop.load(Ordering::Acquire) {
+                    polls.fetch_add(1, Ordering::Relaxed);
+                    future::yield_now().await;
+                }
+            }
+        })
+        .unwrap();
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(1);
+    while polls.load(Ordering::Relaxed) < 128 {
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::yield_now();
+    }
+    let (done_tx, done_rx) = mpsc::channel();
+    runtime
+        .spawn(Priority::High, async move { done_tx.send(()).unwrap() })
+        .unwrap()
+        .detach();
+    done_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("global injector must receive bounded service");
+
+    stop.store(true, Ordering::Release);
+    future::block_on(spinner);
     runtime.shutdown_graceful().unwrap();
 }

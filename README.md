@@ -1,9 +1,10 @@
 # async-runtime
 
 `async-runtime` is a priority-aware native Rust runtime for the smol ecosystem,
-with three general-purpose priority queues and host-driven local domains. v0.2
-adds budgeted, host-loop-friendly local driving and lightweight cross-thread
-dispatch.
+with a work-stealing general worker pool and host-driven local domains. v0.3
+adds a custom `async-task` scheduler with worker-local queues, priority global
+injectors, work stealing, and parked-worker wake-up. v0.2's budgeted local
+driving and lightweight cross-thread dispatch remain available.
 
 ```rust,no_run
 use async_runtime::{Priority, RuntimeBuilder};
@@ -16,11 +17,12 @@ runtime.spawn(Priority::High, async { /* Send work */ })?.detach();
 
 ## Smol ecosystem
 
-The runtime is built directly on `async-executor`, `async-task`,
-`async-channel`, and `futures-lite`. It schedules futures but does not own or
-drive an I/O reactor. Applications remain responsible for driving their chosen
-I/O runtime; `async-io` futures compose naturally when the host drives
-`async-io`.
+The general runtime uses `async-task` for task machinery and
+`crossbeam-deque` for its queues; `LocalDomain` continues to use
+`async-executor`. `async-channel` and `futures-lite` support the local-domain
+and task APIs. The crate schedules futures but does not own or drive an I/O
+reactor. Applications remain responsible for driving their chosen I/O runtime;
+`async-io` futures compose naturally when the host drives `async-io`.
 
 Calling `smol::spawn` still targets smol's own global executor. Submit work
 through this crate's `Runtime` / `Spawner` when it must participate in priority
@@ -34,17 +36,77 @@ The three priorities are `High`, `Normal`, and `Background`. Each general
 worker uses an independent weighted selector, defaulting to 8:4:1. This is
 fair scheduling opportunity, not a global execution order or throughput SLA.
 
-## Scheduling trade-off
+## General scheduler (v0.3)
 
-To schedule across priorities, v0.1 drives each `async_executor::Executor`
-with `try_tick()` / `tick()`. Consequently it uses three shared global queues
-and does not use `Executor::run()`'s per-runner local queues or work stealing.
-This is an intentional correctness-first trade-off; benchmarks determine
-whether a later custom `async-task` scheduler is warranted.
+The v0.3 general `Runtime` has one FIFO local queue per priority for every
+worker, plus one global injector per priority. A runnable scheduled by that
+runtime's worker goes to that worker's matching local queue; a runnable
+scheduled by another thread goes to the matching global injector. This gives
+nested and self-woken work a locality preference without making a worker
+thread-affine.
 
-Workers wait on executor and shutdown futures through
-`futures_lite::future::block_on`. The runtime does not implement an I/O reactor
-or prescribe one to the host.
+For each weighted priority opportunity (the default remains `8:4:1`), a worker
+normally tries its local queue first, then takes a batch from the matching
+global injector, and finally tries other workers as rotating steal victims.
+After a bounded local burst it checks the global injector first, preventing a
+continuously self-waking local source from starving same-priority external
+submissions. Stealing
+can move work between workers, so callers must not infer an execution thread
+from a general task's submission thread. Use `LocalDomain` for genuine thread
+affinity.
+
+Idle workers park on a condition variable after checking the queues. Submitting
+work wakes one parked worker; shutdown wakes all workers. This avoids busy
+waiting when the general pool is idle, but it is an implementation mechanism,
+not a latency or power-use guarantee.
+
+Priority is a scheduling preference, not a strict global order, completion
+ratio, throughput SLA, or starvation-proof deadline service. Work stealing and
+the per-worker selector improve availability of queued work; applications that
+need realtime behavior must still keep polls short, bound their own work, and
+measure their target host.
+
+The runtime does not implement an I/O reactor or prescribe one to the host.
+
+### Optional scheduler statistics
+
+Enable the `stats` feature to expose a point-in-time `RuntimeStats` snapshot:
+
+```toml
+[dependencies]
+async-runtime = { version = "0.3", features = ["stats"] }
+```
+
+```rust,no_run
+# use async_runtime::RuntimeBuilder;
+# use std::num::NonZeroUsize;
+let runtime = RuntimeBuilder::new(NonZeroUsize::new(2).unwrap()).build()?;
+let stats = runtime.stats();
+println!("workers={}, executed={}", stats.workers, stats.executed);
+# runtime.shutdown_now()?;
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+`RuntimeStats` includes approximate runnable queue counts, sleeping workers,
+executions, steals, submission origin, parks, and wake notifications. It is
+intended for diagnostics and benchmark interpretation: concurrent activity can
+change values while the snapshot is read, and queue counts are not task
+completion or liveness counts. Without the feature, neither `RuntimeStats` nor
+`Runtime::stats()` is part of the public API.
+
+### v0.3 API compatibility and limits
+
+`RuntimeBuilder`, `Runtime`, `Spawner`, `Task`, `FallibleTask`, priorities, and
+shutdown APIs retain their v0.2 public shapes. v0.3 changes the internal general
+scheduler, so code should rely on the documented priority and task-lifecycle
+semantics rather than an old queue or worker-selection detail. No migration is
+needed for ordinary `spawn(priority, future)` calls.
+
+General queues remain unbounded and do not provide submission backpressure.
+Tasks are cooperative: a long synchronous `Future::poll` can delay priority
+selection, stealing, shutdown progress, and wake handling. A task panic is
+reported through its task handle according to the existing `Task` semantics;
+use task handles or an application panic hook when that observation matters.
 
 ## Lifecycle
 
@@ -164,25 +226,64 @@ host-driven local domain. Run any of them with `cargo run --example <name>`.
    inspect completion, and observe task panics.
 7. [07_shutdown](examples/07_shutdown.rs) — graceful local draining, timed
    general shutdown, immediate cancellation, and rejection of late work.
-8. [90_best_practice_host_loop](examples/90_best_practice_host_loop.rs) — a
+8. [08_nested_worker_locality](examples/08_nested_worker_locality.rs) — nested
+   general work prefers its worker's local queue; it is not thread affinity and
+   may be stolen.
+9. [09_external_multi_producer](examples/09_external_multi_producer.rs) — many
+   threads submit through cloned `Spawner`s into global injectors.
+10. [10_priority_fairness](examples/10_priority_fairness.rs) — background work
+    makes progress while High work yields; this demonstrates weighted
+    opportunity, not a realtime guarantee.
+11. [11_idle_wake](examples/11_idle_wake.rs) — external submission wakes an
+    idle worker; use benchmarks rather than its printed time for measurement.
+12. [12_custom_priority_weights](examples/12_custom_priority_weights.rs) — set
+    a non-zero three-priority ratio while preserving eventual opportunities.
+13. [13_scheduler_stats](examples/13_scheduler_stats.rs) — inspect the
+    optional approximate counters (`cargo run --example 13_scheduler_stats
+    --features stats`).
+14. [90_best_practice_host_loop](examples/90_best_practice_host_loop.rs) — a
    practical UI/render/game host-loop shape with per-frame budgeted driving.
 
 ## Performance scenarios
 
 Performance workloads are split by question instead of being hidden in one
-large benchmark. Run one with `cargo bench --bench <name>`:
+large benchmark. Run the suite with `cargo bench`, or one scenario with
+`cargo bench --bench <name>`:
 
-- `general_spawn`: batch spawn/await and nested spawn.
-- `priority`: per-priority and mixed 8:4:1 throughput.
+- `general_spawn`: batch spawn/await and nested spawn; nested work also
+  exercises worker-local routing.
+- `priority`: per-priority and mixed 8:4:1 throughput under the scheduler.
 - `local_driving`: drive-only `run_n` and `run_for` cost.
 - `local_dispatch`: real cross-thread producer, result bridge versus both
   fire-and-forget paths.
 - `frame_like`: preloaded inbox work under 100 us, 500 us, and 1 ms budgets.
 - `shutdown`: graceful drain and immediate cancellation.
-- `yield_storm`: many tasks repeatedly yielding and being requeued.
+- `yield_storm`: many tasks repeatedly yielding and being requeued; it is a
+  useful stress scenario for local routing, global injection, and stealing.
+- `v030_external_producers`: submission contention from 1–16 external
+  producers.
+- `v030_nested_locality`: nested spawn/completion under different worker and
+  child counts.
+- `v030_steal_imbalance`: a parent creates yielding children, approximating an
+  imbalanced local queue through the public API.
+- `v030_yield_wake_storm`: separate cooperative-yield and externally-woken
+  pending-task storms.
+- `v030_priority_latency` and `v030_starvation`: bounded probe-progress
+  scenarios while High work is queued; they are not SLA or infinite-stream
+  proofs.
+- `v030_idle_wake`: complete park/submit/wake/re-park cycles (run with
+  `cargo bench --bench v030_idle_wake --features stats`); CPU use still needs
+  an OS profiler.
 
-See the recorded environment, measurement boundaries, and results in the
-[v0.2 baseline](benchmarks/baseline-v0.2.md).
+Use the same machine, Rust toolchain, workload parameters, and release profile
+when comparing scheduler revisions. These benchmarks describe scenarios, not
+an assertion that v0.3 is faster than a prior version or another runtime. The
+recorded environments and measurement boundaries are available in the
+[v0.2 baseline](benchmarks/baseline-v0.2.md) and the
+[v0.3 baseline](benchmarks/baseline-v0.3.md).
+
+For the functional suite, run `cargo test`; include optional observability with
+`cargo test --all-features`, and documentation examples with `cargo test --doc`.
 
 See [the Chinese README](README_ZH.md).
 
