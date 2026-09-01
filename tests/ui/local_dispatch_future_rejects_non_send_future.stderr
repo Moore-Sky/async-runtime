@@ -1,0 +1,20 @@
+error: future cannot be sent between threads safely
+ --> tests/ui/local_dispatch_future_rejects_non_send_future.rs:8:37
+  |
+8 |     let _ = spawner.dispatch_future(async move { drop(value) });
+  |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^ future created by async block is not `Send`
+  |
+  = help: within `[async block@$DIR/tests/ui/local_dispatch_future_rejects_non_send_future.rs:8:37: 8:63]`, the trait `Send` is not implemented for `Rc<()>`
+note: captured value is not `Send`
+ --> tests/ui/local_dispatch_future_rejects_non_send_future.rs:8:55
+  |
+8 |     let _ = spawner.dispatch_future(async move { drop(value) });
+  |                                                       ^^^^^ has type `Rc<()>` which is not `Send`
+note: required by a bound in `LocalSpawner::dispatch_future`
+ --> src/local.rs
+  |
+  |     pub fn dispatch_future<F>(&self, future: F) -> Result<(), SpawnError>
+  |            --------------- required by a bound in this associated function
+  |     where
+  |         F: Future<Output = ()> + Send + 'static,
+  |                                  ^^^^ required by this bound in `LocalSpawner::dispatch_future`

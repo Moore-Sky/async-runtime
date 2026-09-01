@@ -8,6 +8,7 @@ use std::panic::AssertUnwindSafe;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak};
+use std::time::{Duration, Instant};
 
 use async_channel::{Receiver, Sender};
 use async_executor::LocalExecutor;
@@ -34,6 +35,23 @@ pub struct LocalDomain {
 pub struct LocalSpawner {
     sender: Sender<InboxCommand>,
     shared: Weak<Shared>,
+}
+
+/// Statistics from a time-budgeted [`LocalDomain`] drive.
+///
+/// A drive step has the same scheduling semantics as [`LocalDomain::try_tick`]:
+/// it may materialize one remote inbox command and gives an already-materialized
+/// local runnable one opportunity to make progress. It is not a count of
+/// completed tasks or individual `Future::poll` calls.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[non_exhaustive]
+pub struct RunStats {
+    /// Number of non-blocking drive steps that made progress.
+    pub drive_steps: usize,
+    /// Wall-clock time spent in this drive call.
+    pub elapsed: Duration,
+    /// Number of remote inbox commands materialized by these drive steps.
+    pub inbox_commands: usize,
 }
 
 struct Shared {
@@ -73,6 +91,12 @@ impl Drop for AcceptedGuard {
 struct InboxCommand {
     run: Option<RunCommand>,
     cancel: Option<Box<dyn FnOnce() + Send + 'static>>,
+}
+
+#[derive(Clone, Copy)]
+struct DriveProgress {
+    made_progress: bool,
+    inbox_commands: usize,
 }
 
 impl InboxCommand {
@@ -158,14 +182,60 @@ impl LocalDomain {
 
     /// Processes a pending remote command or one scheduled local runnable.
     pub fn try_tick(&self) -> bool {
+        self.try_drive_step().made_progress
+    }
+
+    /// Performs at most `max_steps` non-blocking drive steps.
+    ///
+    /// Returns the number of steps that made progress. A step has the same
+    /// scheduling semantics as [`Self::try_tick`]; it is not a completed-task
+    /// count. Passing zero does not poll work.
+    pub fn run_n(&self, max_steps: usize) -> usize {
+        let mut drive_steps = 0;
+        while drive_steps < max_steps {
+            if !self.try_drive_step().made_progress {
+                break;
+            }
+            drive_steps += 1;
+        }
+        drive_steps
+    }
+
+    /// Drives ready work without blocking until the soft time budget expires.
+    ///
+    /// The clock is checked before every drive step. Rust futures cannot be
+    /// preempted during a single `poll`, so one slow poll may make `elapsed`
+    /// exceed `budget`. A zero budget does not poll work.
+    pub fn run_for(&self, budget: Duration) -> RunStats {
+        let started = Instant::now();
+        let mut stats = RunStats::default();
+        while started.elapsed() < budget {
+            let progress = self.try_drive_step();
+            if !progress.made_progress {
+                break;
+            }
+            stats.drive_steps += 1;
+            stats.inbox_commands += progress.inbox_commands;
+        }
+        stats.elapsed = started.elapsed();
+        stats
+    }
+
+    fn try_drive_step(&self) -> DriveProgress {
         if let Ok(command) = self.inbox.try_recv() {
             command.run(&self.executor, self.shared.lifecycle.load() != CLOSED);
             // A continuously supplied inbox must not starve already-materialized
             // local runnables. Give the executor one opportunity per command.
             let _ = self.executor.try_tick();
-            true
+            DriveProgress {
+                made_progress: true,
+                inbox_commands: 1,
+            }
         } else {
-            self.executor.try_tick()
+            DriveProgress {
+                made_progress: self.executor.try_tick(),
+                inbox_commands: 0,
+            }
         }
     }
 
@@ -308,6 +378,84 @@ impl LocalSpawner {
                 Err(SpawnError::Closed)
             }
         }
+    }
+
+    /// Dispatches a callback for fire-and-forget execution on the owner thread.
+    ///
+    /// This avoids allocating a result-bearing [`Task`]. Panics are isolated so
+    /// they do not unwind through the owner drive loop; the process panic hook
+    /// still runs normally.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SpawnError::Closed`] if the domain no longer exists or has
+    /// begun shutting down.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal lifecycle mutex was poisoned by an earlier panic.
+    pub fn dispatch<F>(&self, callback: F) -> Result<(), SpawnError>
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        self.dispatch_future(async move { callback() })
+    }
+
+    /// Dispatches a future for fire-and-forget execution on the owner thread.
+    ///
+    /// This avoids the result and cancellation bridge used by [`Self::spawn`].
+    /// Panics are isolated so they do not unwind through the owner drive loop;
+    /// the process panic hook still runs normally.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SpawnError::Closed`] if the domain no longer exists or has
+    /// begun shutting down.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal lifecycle mutex was poisoned by an earlier panic.
+    pub fn dispatch_future<F>(&self, future: F) -> Result<(), SpawnError>
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        let Some(shared) = self.shared.upgrade() else {
+            return Err(SpawnError::Closed);
+        };
+        let _gate = shared.gate.lock().expect("local lifecycle mutex poisoned");
+        if shared.lifecycle.load() != RUNNING {
+            return Err(SpawnError::Closed);
+        }
+
+        shared.accepted_tasks.fetch_add(1, Ordering::AcqRel);
+        let guard = AcceptedGuard::new(Arc::clone(&shared));
+        let command = dispatch_command(future, guard);
+        match self.sender.try_send(command) {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                error.into_inner().cancel();
+                Err(SpawnError::Closed)
+            }
+        }
+    }
+}
+
+fn dispatch_command<F>(future: F, guard: AcceptedGuard) -> InboxCommand
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    InboxCommand {
+        run: Some(Box::new(move |executor| {
+            executor
+                .spawn(async move {
+                    let _guard = guard;
+                    let _ = AssertUnwindSafe(future).catch_unwind().await;
+                })
+                .detach();
+        })),
+        // Dropping the uncalled `run` closure drops the future and accepted
+        // guard, so fire-and-forget cancellation needs no separate bridge state.
+        cancel: None,
     }
 }
 

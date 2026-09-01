@@ -18,7 +18,7 @@ mod task;
 mod worker;
 
 pub use error::{ShutdownError, ShutdownOutcome, SpawnError};
-pub use local::{LocalDomain, LocalSpawner};
+pub use local::{LocalDomain, LocalSpawner, RunStats};
 pub use priority::{Priority, PriorityWeights};
 pub use runtime::{Runtime, RuntimeBuilder, Spawner};
 pub use task::{FallibleTask, Task};

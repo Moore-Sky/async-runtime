@@ -1,4 +1,7 @@
 //! General runtime priorities.
+//!
+//! Run with `cargo run --example 02_priority`.
+//! Use priorities for scheduling preference, not a global execution-order SLA.
 
 use async_runtime::{Priority, RuntimeBuilder};
 use std::num::NonZeroUsize;

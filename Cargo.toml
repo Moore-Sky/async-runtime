@@ -1,6 +1,6 @@
 [package]
 name = "async-runtime"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.71"
 license = "Apache-2.0 OR MIT"
@@ -22,5 +22,29 @@ criterion = "0.5.1"
 trybuild = "=1.0.110"
 
 [[bench]]
-name = "executor"
+name = "general_spawn"
+harness = false
+
+[[bench]]
+name = "priority"
+harness = false
+
+[[bench]]
+name = "local_driving"
+harness = false
+
+[[bench]]
+name = "local_dispatch"
+harness = false
+
+[[bench]]
+name = "frame_like"
+harness = false
+
+[[bench]]
+name = "shutdown"
+harness = false
+
+[[bench]]
+name = "yield_storm"
 harness = false
