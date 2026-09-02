@@ -9,7 +9,6 @@ readme = "README.md"
 documentation = "https://docs.rs/async-runtime"
 keywords = ["async", "executor", "runtime", "priority", "smol"]
 categories = ["asynchronous", "concurrency"]
-exclude = ["改进计划.md"]
 
 [dependencies]
 async-channel = "2.5"
@@ -25,6 +24,7 @@ stats = []
 [dev-dependencies]
 async-io = "2.6"
 criterion = "0.5.1"
+loom = "=0.7.2"
 trybuild = "=1.0.110"
 
 [[bench]]
@@ -69,6 +69,18 @@ harness = false
 
 [[bench]]
 name = "v030_priority_latency"
+harness = false
+
+[[bench]]
+name = "v030_latency_sampling"
+harness = false
+
+[[bench]]
+name = "v030_spawn_latency_sampling"
+harness = false
+
+[[bench]]
+name = "v030_completion_contention"
 harness = false
 
 [[bench]]

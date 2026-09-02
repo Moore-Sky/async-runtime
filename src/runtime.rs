@@ -46,6 +46,10 @@ impl RuntimeBuilder {
             drain_lock: Mutex::new(()),
             drained: Condvar::new(),
             worker_ids: Mutex::new(Vec::with_capacity(self.worker_threads.get())),
+            #[cfg(test)]
+            admission_pause: Mutex::new(None),
+            #[cfg(test)]
+            last_completion_pause: Mutex::new(None),
         });
         let mut workers = Vec::with_capacity(self.worker_threads.get());
         for (number, queues) in worker_queues.into_iter().enumerate() {
@@ -90,6 +94,11 @@ impl Runtime {
     /// # Errors
     ///
     /// Returns [`SpawnError::Closed`] after shutdown begins.
+    ///
+    /// A successful return means the task was admitted into the runtime's
+    /// lifecycle. A concurrent forced or timed shutdown may cancel it before
+    /// its first poll; graceful shutdown still waits for it to reach a terminal
+    /// state.
     pub fn spawn<F, T>(&self, priority: Priority, future: F) -> Result<Task<T>, SpawnError>
     where
         F: Future<Output = T> + Send + 'static,
@@ -220,6 +229,11 @@ pub struct Spawner {
 impl Spawner {
     /// Submits a task to one priority queue.
     ///
+    /// A successful return means the task was admitted into the runtime's
+    /// lifecycle. A concurrent forced or timed shutdown may cancel it before
+    /// its first poll; graceful shutdown still waits for it to reach a terminal
+    /// state.
+    ///
     /// # Errors
     ///
     /// Returns [`SpawnError::Closed`] if the runtime no longer exists or has
@@ -251,6 +265,10 @@ pub(crate) struct RuntimeState {
     drain_lock: Mutex<()>,
     drained: Condvar,
     worker_ids: Mutex<Vec<ThreadId>>,
+    #[cfg(test)]
+    admission_pause: Mutex<Option<Arc<TestPause>>>,
+    #[cfg(test)]
+    last_completion_pause: Mutex<Option<Arc<TestPause>>>,
 }
 
 impl RuntimeState {
@@ -264,12 +282,19 @@ impl RuntimeState {
             return Err(SpawnError::Closed);
         }
         self.accepted_tasks.fetch_add(1, Ordering::AcqRel);
+        // This token begins at admission, not at the first poll. It is moved
+        // into the task immediately so construction unwind, cancellation,
+        // forced shutdown, and normal completion all retire the admission
+        // exactly once.
         let completion = CompletionGuard {
             // Tasks are owned by the scheduler inside this state. Keeping only a weak
             // reference here is essential: a queued task must not keep the scheduler
             // (and therefore itself) alive during shutdown_now or Runtime::drop.
             state: Arc::downgrade(self),
         };
+        drop(gate);
+        #[cfg(test)]
+        self.pause_after_admission();
         let tracked = async move {
             let _completion = completion;
             future.await
@@ -289,7 +314,6 @@ impl RuntimeState {
         // cancellation cleanup. Initial scheduling follows the same local vs
         // global routing rule as every later wake.
         runnable.schedule();
-        drop(gate);
         Ok(Task::direct(task))
     }
     pub(crate) fn register_worker(&self, id: ThreadId) {
@@ -337,9 +361,40 @@ impl RuntimeState {
         drained
     }
     fn complete_task(&self) {
-        let _guard = self.drain_lock.lock().expect("runtime drain lock poisoned");
-        if self.accepted_tasks.fetch_sub(1, Ordering::AcqRel) == 1 {
+        let previous = self.accepted_tasks.fetch_sub(1, Ordering::AcqRel);
+        assert!(previous > 0, "runtime accepted task count underflow");
+        if previous == 1 {
+            #[cfg(test)]
+            self.pause_before_last_completion_notify();
+            // The waiter checks the zero predicate while holding this same
+            // mutex. Locking before notify closes both interleavings: either
+            // the waiter observes zero, or it has atomically begun waiting.
+            let _guard = self.drain_lock.lock().expect("runtime drain lock poisoned");
             self.drained.notify_all();
+        }
+    }
+
+    #[cfg(test)]
+    fn pause_after_admission(&self) {
+        let pause = self
+            .admission_pause
+            .lock()
+            .expect("runtime test hook poisoned")
+            .clone();
+        if let Some(pause) = pause {
+            pause.pause();
+        }
+    }
+
+    #[cfg(test)]
+    fn pause_before_last_completion_notify(&self) {
+        let pause = self
+            .last_completion_pause
+            .lock()
+            .expect("runtime test hook poisoned")
+            .clone();
+        if let Some(pause) = pause {
+            pause.pause();
         }
     }
 }
@@ -355,5 +410,189 @@ impl Drop for CompletionGuard {
         if let Some(state) = self.state.upgrade() {
             state.complete_task();
         }
+    }
+}
+
+#[cfg(test)]
+struct TestPause {
+    reached: std::sync::Barrier,
+    released: std::sync::Barrier,
+}
+
+#[cfg(test)]
+impl TestPause {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            reached: std::sync::Barrier::new(2),
+            released: std::sync::Barrier::new(2),
+        })
+    }
+
+    fn pause(&self) {
+        self.reached.wait();
+        self.released.wait();
+    }
+
+    fn wait_until_reached(&self) {
+        self.reached.wait();
+    }
+
+    fn release(&self) {
+        self.released.wait();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Gate, RuntimeBuilder, ShutdownOutcome, TestPause};
+    use crate::Priority;
+    use futures_lite::future;
+    use std::num::NonZeroUsize;
+    use std::sync::atomic::Ordering;
+    use std::sync::{mpsc, Arc};
+    use std::time::Duration;
+
+    fn runtime() -> super::Runtime {
+        RuntimeBuilder::new(NonZeroUsize::new(1).expect("non-zero worker count"))
+            .build()
+            .expect("runtime builds")
+    }
+
+    fn wait_until_not_running(state: &super::RuntimeState) {
+        for _ in 0..10_000 {
+            if *state.gate.lock().expect("runtime lifecycle gate poisoned") != Gate::Running {
+                return;
+            }
+            std::thread::yield_now();
+        }
+        panic!("shutdown did not close the admission gate");
+    }
+
+    #[test]
+    fn graceful_shutdown_waits_for_admitted_task_before_initial_schedule() {
+        let runtime = runtime();
+        let state = Arc::clone(&runtime.state);
+        let pause = TestPause::new();
+        *state.admission_pause.lock().expect("test hook poisoned") = Some(Arc::clone(&pause));
+        let spawner = runtime.spawner();
+        let (ran_tx, ran_rx) = mpsc::channel();
+        let producer = std::thread::spawn(move || {
+            spawner
+                .spawn(Priority::Normal, async move {
+                    ran_tx.send(()).expect("test receiver remains alive");
+                })
+                .expect("admitted spawn succeeds")
+                .detach();
+        });
+        pause.wait_until_reached();
+
+        let (shutdown_tx, shutdown_rx) = mpsc::channel();
+        let shutdown = std::thread::spawn(move || {
+            shutdown_tx
+                .send(runtime.shutdown_graceful())
+                .expect("test receiver remains alive");
+        });
+        wait_until_not_running(&state);
+        assert!(shutdown_rx.try_recv().is_err());
+
+        pause.release();
+        producer.join().expect("producer does not panic");
+        shutdown_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("graceful shutdown finishes after scheduling")
+            .expect("graceful shutdown succeeds");
+        shutdown.join().expect("shutdown thread does not panic");
+        ran_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("admitted task runs before graceful shutdown returns");
+        assert_eq!(state.accepted_tasks.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn forced_shutdown_cancels_admitted_task_before_initial_schedule() {
+        let runtime = runtime();
+        let state = Arc::clone(&runtime.state);
+        let pause = TestPause::new();
+        *state.admission_pause.lock().expect("test hook poisoned") = Some(Arc::clone(&pause));
+        let spawner = runtime.spawner();
+        let (task_tx, task_rx) = mpsc::channel();
+        let producer = std::thread::spawn(move || {
+            let task = spawner
+                .spawn(Priority::Normal, async { 7_u8 })
+                .expect("spawn was admitted before shutdown");
+            task_tx.send(task).expect("test receiver remains alive");
+        });
+        pause.wait_until_reached();
+
+        runtime.shutdown_now().expect("forced shutdown succeeds");
+        pause.release();
+        producer.join().expect("producer does not panic");
+        let task = task_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("spawn returns its cancelled task handle");
+        assert_eq!(future::block_on(task.fallible()), None);
+        assert_eq!(state.accepted_tasks.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn timed_shutdown_cancels_admitted_task_before_initial_schedule() {
+        let runtime = runtime();
+        let state = Arc::clone(&runtime.state);
+        let pause = TestPause::new();
+        *state.admission_pause.lock().expect("test hook poisoned") = Some(Arc::clone(&pause));
+        let spawner = runtime.spawner();
+        let (task_tx, task_rx) = mpsc::channel();
+        let producer = std::thread::spawn(move || {
+            let task = spawner
+                .spawn(Priority::Normal, async { 9_u8 })
+                .expect("spawn was admitted before shutdown");
+            task_tx.send(task).expect("test receiver remains alive");
+        });
+        pause.wait_until_reached();
+
+        assert!(matches!(
+            runtime
+                .shutdown_timeout(Duration::ZERO)
+                .expect("timed shutdown succeeds"),
+            ShutdownOutcome::TimedOut { remaining_tasks: 1 }
+        ));
+        pause.release();
+        producer.join().expect("producer does not panic");
+        let task = task_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("spawn returns its cancelled task handle");
+        assert_eq!(future::block_on(task.fallible()), None);
+        assert_eq!(state.accepted_tasks.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn waiter_observes_zero_when_last_completion_precedes_notification() {
+        let runtime = runtime();
+        let state = Arc::clone(&runtime.state);
+        let pause = TestPause::new();
+        *state
+            .last_completion_pause
+            .lock()
+            .expect("test hook poisoned") = Some(Arc::clone(&pause));
+        let task = runtime
+            .spawn(Priority::Normal, async {})
+            .expect("spawn succeeds");
+        pause.wait_until_reached();
+        assert_eq!(state.accepted_tasks.load(Ordering::Acquire), 0);
+
+        let (wait_tx, wait_rx) = mpsc::channel();
+        let wait_state = Arc::clone(&state);
+        let waiter = std::thread::spawn(move || {
+            wait_state.wait_for_drain();
+            wait_tx.send(()).expect("test receiver remains alive");
+        });
+        wait_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("waiter sees zero without needing the pending notification");
+
+        pause.release();
+        future::block_on(task);
+        waiter.join().expect("waiter does not panic");
+        runtime.shutdown_graceful().expect("shutdown succeeds");
     }
 }

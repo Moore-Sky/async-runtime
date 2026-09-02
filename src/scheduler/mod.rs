@@ -21,7 +21,10 @@ thread_local! {
 }
 
 const PRIORITY_COUNT: usize = 3;
-const LOCAL_BURST_LIMIT: u8 = 64;
+// Bound how long a worker may keep consuming locally requeued work before it
+// checks the global injector. High priority gets the most frequent external
+// admission check; Background retains the larger locality-friendly burst.
+const LOCAL_BURST_LIMITS: [u8; PRIORITY_COUNT] = [8, 16, 64];
 
 fn priority_index(priority: Priority) -> usize {
     match priority {
@@ -209,7 +212,7 @@ impl Scheduler {
             let context = context
                 .as_mut()
                 .filter(|context| context.scheduler_id == self.id)?;
-            if context.local_burst[priority_index] >= LOCAL_BURST_LIMIT {
+            if context.local_burst[priority_index] >= LOCAL_BURST_LIMITS[priority_index] {
                 context.local_burst[priority_index] = 0;
                 if let Some(runnable) =
                     self.steal_global(priority_index, &context.queues.queues[priority_index])
@@ -260,12 +263,17 @@ impl Scheduler {
         if worker_count < 2 {
             return None;
         }
-        for _ in 0..worker_count.saturating_sub(1) {
+        // Count victims actually inspected rather than cursor positions. The
+        // cursor can point at this worker, which must not cause us to skip one
+        // of the other workers.
+        let mut checked_victims = 0;
+        while checked_victims < worker_count - 1 {
             let victim = context.victim_cursor % worker_count;
             context.victim_cursor = context.victim_cursor.wrapping_add(1);
             if victim == context.index {
                 continue;
             }
+            checked_victims += 1;
             loop {
                 self.steal_attempt();
                 match self.stealers[victim][priority]
@@ -460,13 +468,18 @@ impl Scheduler {
 
 #[cfg(test)]
 mod tests {
-    use super::{priority_index, Scheduler};
+    use super::{priority_index, Scheduler, LOCAL_BURST_LIMITS};
     use crate::Priority;
     use async_task::Runnable;
 
     fn runnable() -> Runnable {
         let (runnable, _task) = async_task::spawn(async {}, |_| {});
         runnable
+    }
+
+    #[test]
+    fn local_burst_limits_favor_urgent_global_checks() {
+        assert_eq!(LOCAL_BURST_LIMITS, [8, 16, 64]);
     }
 
     #[test]
@@ -489,6 +502,26 @@ mod tests {
         scheduler.schedule(Priority::High, runnable());
         scheduler.enter_worker(0, queues.pop().expect("one worker queue set"));
         assert!(scheduler.take(Priority::High).is_none());
+        scheduler.leave_worker();
+    }
+
+    #[test]
+    fn victim_traversal_checks_every_other_worker_when_cursor_starts_at_self() {
+        let (scheduler, queues) = Scheduler::new(3);
+        let mut queues = queues.into_iter();
+        let victim_before_self = queues.next().expect("worker zero queue set");
+        let thief = queues.next().expect("worker one queue set");
+        let _victim_after_self = queues.next().expect("worker two queue set");
+
+        scheduler.enter_worker(1, thief);
+
+        // The initial cursor is worker 2. An empty pass visits workers 2 and
+        // 0, leaving the cursor pointing at worker 1 (the thief itself).
+        assert!(scheduler.take(Priority::Normal).is_none());
+        victim_before_self.queues[priority_index(Priority::Normal)].push(runnable());
+
+        // Starting from self must still inspect worker 2 and then worker 0.
+        assert!(scheduler.take(Priority::Normal).is_some());
         scheduler.leave_worker();
     }
 

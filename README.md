@@ -285,8 +285,6 @@ recorded environments and measurement boundaries are available in the
 For the functional suite, run `cargo test`; include optional observability with
 `cargo test --all-features`, and documentation examples with `cargo test --doc`.
 
-See [the Chinese README](README_ZH.md).
-
 ## Status
 
 The crate uses Edition 2021 and requires Rust 1.71 or newer. Its native targets
