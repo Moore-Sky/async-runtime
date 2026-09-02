@@ -1,14 +1,18 @@
 [package]
 name = "async-runtime"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 rust-version = "1.71"
 license = "Apache-2.0 OR MIT"
 description = "A priority-aware native async runtime for the smol ecosystem with host-driven local domains"
 readme = "README.md"
 documentation = "https://docs.rs/async-runtime"
+repository = "https://github.com/Moore-Sky/async-runtime"
 keywords = ["async", "executor", "runtime", "priority", "smol"]
 categories = ["asynchronous", "concurrency"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
 async-channel = "2.5"
