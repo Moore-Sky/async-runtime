@@ -1,10 +1,10 @@
 # async-runtime
 
 `async-runtime` is a priority-aware native Rust runtime for the smol ecosystem,
-with a work-stealing general worker pool and host-driven local domains. v0.3
-adds a custom `async-task` scheduler with worker-local queues, priority global
-injectors, work stealing, and parked-worker wake-up. v0.2's budgeted local
-driving and lightweight cross-thread dispatch remain available.
+with a work-stealing general worker pool and host-driven local domains. It
+combines a custom `async-task` scheduler with worker-local queues, priority
+global injectors, work stealing, and parked-worker wake-up with budgeted local
+driving and lightweight cross-thread dispatch.
 
 ```rust,no_run
 use async_runtime::{Priority, RuntimeBuilder};
@@ -36,9 +36,9 @@ The three priorities are `High`, `Normal`, and `Background`. Each general
 worker uses an independent weighted selector, defaulting to 8:4:1. This is
 fair scheduling opportunity, not a global execution order or throughput SLA.
 
-## General scheduler (v0.3)
+## General scheduler
 
-The v0.3 general `Runtime` has one FIFO local queue per priority for every
+The general `Runtime` has one FIFO local queue per priority for every
 worker, plus one global injector per priority. A runnable scheduled by that
 runtime's worker goes to that worker's matching local queue; a runnable
 scheduled by another thread goes to the matching global injector. This gives
@@ -94,13 +94,16 @@ change values while the snapshot is read, and queue counts are not task
 completion or liveness counts. Without the feature, neither `RuntimeStats` nor
 `Runtime::stats()` is part of the public API.
 
-### v0.3 API compatibility and limits
+### API stability and limits
 
-`RuntimeBuilder`, `Runtime`, `Spawner`, `Task`, `FallibleTask`, priorities, and
-shutdown APIs retain their v0.2 public shapes. v0.3 changes the internal general
-scheduler, so code should rely on the documented priority and task-lifecycle
-semantics rather than an old queue or worker-selection detail. No migration is
-needed for ordinary `spawn(priority, future)` calls.
+`0.3.0` is the first version published to crates.io. Earlier `0.1` and
+`0.2` revisions exist only in the repository's development history; they were
+not registry releases and do not define a crates.io migration path.
+
+`RuntimeBuilder`, `Runtime`, `Spawner`, `Task`, `FallibleTask`, priorities,
+and shutdown APIs are the public surface of the initial release. Code should
+rely on the documented priority and task-lifecycle semantics rather than
+internal queue or worker-selection details.
 
 General queues remain unbounded and do not provide submission backpressure.
 Tasks are cooperative: a long synchronous `Future::poll` can delay priority
@@ -118,7 +121,7 @@ task. `shutdown_now()` cancels outstanding work.
 only `Send` spawn commands: local runnables and `!Send` data never cross a
 thread boundary.
 
-## Host-driven `LocalDomain` (v0.2)
+## Host-driven `LocalDomain`
 
 `LocalDomain` is intended for a UI, render, game, or other host-owned thread.
 Create it and call its driving methods from that one owner thread. It does not
@@ -200,7 +203,7 @@ A panic in dispatched work is isolated so that the `LocalDomain` remains
 driveable. Rust's installed panic hook still runs, so applications should set a
 hook or logging integration if they need to observe such failures.
 
-The cross-thread inbox is deliberately **unbounded** in v0.2. `dispatch`,
+The cross-thread inbox is deliberately **unbounded**. `dispatch`,
 `dispatch_future`, and remote `spawn` do not apply backpressure; a producer
 that outruns the owner thread can grow memory without limit. Bound production
 at the caller, coalesce redundant updates, or drain the domain more often.
@@ -277,10 +280,11 @@ large benchmark. Run the suite with `cargo bench`, or one scenario with
 
 Use the same machine, Rust toolchain, workload parameters, and release profile
 when comparing scheduler revisions. These benchmarks describe scenarios, not
-an assertion that v0.3 is faster than a prior version or another runtime. The
+an assertion that the current release is faster than another runtime. The
 recorded environments and measurement boundaries are available in the
-[v0.2 baseline](benchmarks/baseline-v0.2.md) and the
-[v0.3 baseline](benchmarks/baseline-v0.3.md).
+[pre-release v0.2 engineering baseline](benchmarks/baseline-v0.2.md) and the
+[v0.3 engineering baseline](benchmarks/baseline-v0.3.md). The v0.2 document
+records repository development measurements, not a crates.io release.
 
 For the functional suite, run `cargo test`; include optional observability with
 `cargo test --all-features`, and documentation examples with `cargo test --doc`.
