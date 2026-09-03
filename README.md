@@ -289,9 +289,54 @@ large benchmark. Run the suite with `cargo bench`, or one scenario with
   an OS profiler.
 - `v030_cpu_workload`: a fixed-iteration, single-poll CPU kernel; records
   1→2→4→8 nested-work scaling and per-priority submit-to-complete p50/p95/p99.
-- `v030_local_budget_latency`: true per-call `run_for` elapsed and overshoot
-  p50/p95/p99 for ready-queue and remote-inbox work. Its printed maximum is an
-  observation only, not a regression gate.
+- `v030_local_budget_latency`: both `RunStats::elapsed` and caller-observed
+  wall-clock `run_for` elapsed, with overshoot p50/p95/p99 for ready-queue and
+  remote-inbox work. Ready-queue work is a future poll; remote-inbox work is
+  dispatch-command execution. Printed maximums are observations only, not
+  regression gates.
+
+### Performance snapshot
+
+These numbers give an initial feel for the runtime on one machine; they are
+scenario measurements, not cross-machine claims or latency SLAs. The full
+methodology and tables are in the
+[v0.3 release baseline](benchmarks/baseline-v0.3-release.md).
+
+```text
+CPU: AMD Ryzen 7 8845H (8 physical cores / 16 logical processors)
+Memory: 59.8 GiB
+OS: Windows 11 10.0.26200, 64-bit (x86_64-pc-windows-msvc)
+Power scheme: Balanced
+Rust: rustc 1.97.0-nightly (507271bc1 2026-05-17)
+Cargo: cargo 1.97.0-nightly (4d1f98451 2026-05-15)
+```
+
+The five-round v0.3 release capture measured a trivial normal-task
+spawn-and-complete at 1.0863 us for one task and 205.62 us for 1024 tasks. Its
+fixed CPU kernel scaled from 3,692.6 tasks/s on one worker to 27,888.6 tasks/s
+on eight workers: 7.552x speedup and 94.4% scaling efficiency. A 10,000-task
+cooperative-yield storm with eight yields per task completed in 6.2783 ms.
+
+After adding the caller-side timer, a shorter single-round spot check was run
+on 2026-09-03 with 2,000 samples per case. The selected rows below compare the
+internal `RunStats::elapsed` p99 with the elapsed p99 observed by the caller;
+times are microseconds.
+
+| Source | Budget | Work target | Stats p99 | Outer p99 | Outer overshoot p99 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Ready queue | 100 us | 20 us | 149.0 | 149.5 | 49.5 |
+| Ready queue | 500 us | 100 us | 706.5 | 706.7 | 206.7 |
+| Ready queue | 1000 us | 500 us | 1987.0 | 1987.1 | 987.1 |
+| Remote inbox | 100 us | 20 us | 154.6 | 157.5 | 57.5 |
+| Remote inbox | 500 us | 100 us | 706.0 | 706.0 | 206.0 |
+| Remote inbox | 1000 us | 500 us | 3660.0 | 3660.2 | 2660.2 |
+
+The two timers are nearly identical in these samples, so the observed
+overshoot is inside the `run_for` driving interval rather than its return path.
+Larger work items overshoot more because neither a future poll nor an inbox
+command can be preempted. This spot check is intentionally not a replacement
+for the repeatable five-round release baseline; OS scheduling outliers and
+maximums remain observation-only.
 
 Use the same machine, Rust toolchain, workload parameters, and release profile
 when comparing scheduler revisions. These benchmarks describe scenarios, not

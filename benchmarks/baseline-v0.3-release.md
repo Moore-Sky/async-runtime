@@ -187,12 +187,14 @@ these numbers describe this workload rather than a general priority SLA.
 
 ## Local budget latency
 
-Observed median poll targets were 20.037 us, 100.331 us, and 503.162 us. The
-tables report real `run_for` elapsed time and `elapsed - budget` overshoot in
-microseconds. A call cannot interrupt the poll currently executing when its
+Observed median work targets were 20.037 us, 100.331 us, and 503.162 us. The
+historical v0.3 tables report `RunStats::elapsed` and its `elapsed - budget`
+overshoot in microseconds; caller-side wall-clock elapsed was not retained in
+this capture. Ready-queue work is a future poll, while remote-inbox work is a
+dispatch command. A call cannot interrupt the work item executing when its
 budget expires.
 
-| Queue | Budget | Poll target | Elapsed p50 | p95 | p99 | Overshoot p50 | p95 | p99 |
+| Queue | Budget | Work target | Stats elapsed p50 | p95 | p99 | Stats overshoot p50 | p95 | p99 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Ready | 100 us | 20 us | 118.8 | 119.8 | 136.6 | 18.8 | 19.8 | 36.6 |
 | Ready | 500 us | 20 us | 513.0 | 519.6 | 541.9 | 13.0 | 19.6 | 41.9 |

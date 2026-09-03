@@ -69,7 +69,7 @@ dependencies = [
 
 [[package]]
 name = "async-runtime"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "async-channel",
  "async-executor",
