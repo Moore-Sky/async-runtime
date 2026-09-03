@@ -203,9 +203,10 @@ impl LocalDomain {
 
     /// Drives ready work without blocking until the soft time budget expires.
     ///
-    /// The clock is checked before every drive step. Rust futures cannot be
-    /// preempted during a single `poll`, so one slow poll may make `elapsed`
-    /// exceed `budget`. A zero budget does not poll work.
+    /// The clock is checked before every drive step. A step may execute one
+    /// inbox command and then give one local runnable an opportunity to poll.
+    /// The budget check does not preempt either phase, so time spent in either
+    /// may cause `elapsed` to exceed `budget`. A zero budget starts no work.
     pub fn run_for(&self, budget: Duration) -> RunStats {
         let started = Instant::now();
         let mut stats = RunStats::default();

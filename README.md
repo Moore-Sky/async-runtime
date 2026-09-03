@@ -168,10 +168,11 @@ debug_assert!(stats.elapsed >= Duration::ZERO);
 
 `run_for(budget)` checks the budget before each drive step and stops when the
 domain is idle or the budget expires. `Duration::ZERO` performs no work and
-returns zero progress. This is a **soft** time budget: Rust cannot safely
-preempt a future that is already being polled, so `RunStats::elapsed` can exceed
-the requested budget by the duration of that poll. Keep individual polls short
-and cooperative when frame latency matters.
+returns zero progress. This is a **soft** time budget: a step may execute one
+remote inbox command and then give one local runnable an opportunity to poll.
+The budget check cannot preempt either phase, so time spent in either may cause
+`RunStats::elapsed` to exceed the requested budget. Keep individual command
+closures and future polls short when frame latency matters.
 
 `RunStats` reports `drive_steps`, `inbox_commands`, and `elapsed`; use it to expose
 per-frame progress or to detect backlog trends. It is operational feedback, not
@@ -317,26 +318,10 @@ fixed CPU kernel scaled from 3,692.6 tasks/s on one worker to 27,888.6 tasks/s
 on eight workers: 7.552x speedup and 94.4% scaling efficiency. A 10,000-task
 cooperative-yield storm with eight yields per task completed in 6.2783 ms.
 
-After adding the caller-side timer, a shorter single-round spot check was run
-on 2026-09-03 with 2,000 samples per case. The selected rows below compare the
-internal `RunStats::elapsed` p99 with the elapsed p99 observed by the caller;
-times are microseconds.
-
-| Source | Budget | Work target | Stats p99 | Outer p99 | Outer overshoot p99 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Ready queue | 100 us | 20 us | 149.0 | 149.5 | 49.5 |
-| Ready queue | 500 us | 100 us | 706.5 | 706.7 | 206.7 |
-| Ready queue | 1000 us | 500 us | 1987.0 | 1987.1 | 987.1 |
-| Remote inbox | 100 us | 20 us | 154.6 | 157.5 | 57.5 |
-| Remote inbox | 500 us | 100 us | 706.0 | 706.0 | 206.0 |
-| Remote inbox | 1000 us | 500 us | 3660.0 | 3660.2 | 2660.2 |
-
-The two timers are nearly identical in these samples, so the observed
-overshoot is inside the `run_for` driving interval rather than its return path.
-Larger work items overshoot more because neither a future poll nor an inbox
-command can be preempted. This spot check is intentionally not a replacement
-for the repeatable five-round release baseline; OS scheduling outliers and
-maximums remain observation-only.
+An additional caller-side spot check closely tracked `RunStats::elapsed`. Its
+[supplementary record](benchmarks/local-budget-caller-spot-check-v0.3.3.md) is
+separate from the repeatable five-round release baseline, whose capture did not
+retain caller-side elapsed distributions.
 
 Use the same machine, Rust toolchain, workload parameters, and release profile
 when comparing scheduler revisions. These benchmarks describe scenarios, not
