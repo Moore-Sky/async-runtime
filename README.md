@@ -105,6 +105,13 @@ and shutdown APIs are the public surface of the initial release. Code should
 rely on the documented priority and task-lifecycle semantics rather than
 internal queue or worker-selection details.
 
+The v0.3 scheduler architecture is intentionally frozen. Except for
+correctness fixes, the priority selector, local-burst limits, stealing,
+park/wake, and admission protocols will change only when real application
+traces, a reproducible workload, and a regression against the recorded
+baseline all point to the same problem. This keeps speculative scheduler work
+out of the stable foundation while applications establish their real needs.
+
 General queues remain unbounded and do not provide submission backpressure.
 Tasks are cooperative: a long synchronous `Future::poll` can delay priority
 selection, stealing, shutdown progress, and wake handling. A task panic is
@@ -244,8 +251,11 @@ host-driven local domain. Run any of them with `cargo run --example <name>`.
 13. [13_scheduler_stats](examples/13_scheduler_stats.rs) — inspect the
     optional approximate counters (`cargo run --example 13_scheduler_stats
     --features stats`).
-14. [90_best_practice_host_loop](examples/90_best_practice_host_loop.rs) — a
-   practical UI/render/game host-loop shape with per-frame budgeted driving.
+14. [15_cpu_result_to_local_frame](examples/15_cpu_result_to_local_frame.rs) —
+    the canonical General Runtime → `Send` mailbox → `LocalDomain` → next-frame
+    owner-state handoff, including the `Rc<RefCell<_>>` affinity boundary.
+15. [90_best_practice_host_loop](examples/90_best_practice_host_loop.rs) — a
+    practical UI/render/game host-loop shape with per-frame budgeted driving.
 
 ## Performance scenarios
 
@@ -277,14 +287,21 @@ large benchmark. Run the suite with `cargo bench`, or one scenario with
 - `v030_idle_wake`: complete park/submit/wake/re-park cycles (run with
   `cargo bench --bench v030_idle_wake --features stats`); CPU use still needs
   an OS profiler.
+- `v030_cpu_workload`: a fixed-iteration, single-poll CPU kernel; records
+  1→2→4→8 nested-work scaling and per-priority submit-to-complete p50/p95/p99.
+- `v030_local_budget_latency`: true per-call `run_for` elapsed and overshoot
+  p50/p95/p99 for ready-queue and remote-inbox work. Its printed maximum is an
+  observation only, not a regression gate.
 
 Use the same machine, Rust toolchain, workload parameters, and release profile
 when comparing scheduler revisions. These benchmarks describe scenarios, not
 an assertion that the current release is faster than another runtime. The
-recorded environments and measurement boundaries are available in the
-[pre-release v0.2 engineering baseline](benchmarks/baseline-v0.2.md) and the
-[v0.3 engineering baseline](benchmarks/baseline-v0.3.md). The v0.2 document
-records repository development measurements, not a crates.io release.
+recorded release environment, aggregation rules, and five-round results are in
+the [v0.3 release baseline](benchmarks/baseline-v0.3-release.md). Historical
+pre-release records remain available in the
+[v0.3 engineering baseline](benchmarks/baseline-v0.3.md) and the
+[v0.2 engineering baseline](benchmarks/baseline-v0.2.md); they are development
+measurements, not release baselines.
 
 For the functional suite, run `cargo test`; include optional observability with
 `cargo test --all-features`, and documentation examples with `cargo test --doc`.

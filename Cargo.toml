@@ -99,3 +99,11 @@ required-features = ["stats"]
 [[bench]]
 name = "v030_yield_wake_storm"
 harness = false
+
+[[bench]]
+name = "v030_cpu_workload"
+harness = false
+
+[[bench]]
+name = "v030_local_budget_latency"
+harness = false
