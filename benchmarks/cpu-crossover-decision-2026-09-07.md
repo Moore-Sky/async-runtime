@@ -7,11 +7,15 @@ Ryzen 7 8845H machine, async-runtime's multi-threaded Runtime becomes worthwhile
 between zero work and approximately 2.1 us of measured inline work per task.
 
 At the first non-zero formal workload, all 2/4/8-worker configurations beat
-inline execution in 5/5 independent process rounds, their conservative bounds
-also exceeded 1.0 in 5/5 rounds, and their median speedups exceeded 1.05x. The
-8-worker result is only 1.14x at this boundary but grows to 4.40x at 5.3 us per
-task. This is the expected scaling shape, not evidence of a scheduler anomaly;
-this pass does not justify starting a scheduler candidate.
+inline execution in all five observed process rounds, their conservative bounds
+also exceeded 1.0 in all five rounds, and their median speedups exceeded 1.05x.
+Round 1 overlapped unrelated validation load; excluding it leaves all three
+worker configurations passing in 4/4 clean rounds and does not change the
+decision. The 8-worker result is only 1.14x at this boundary but grows to 4.40x
+at 5.3 us per task. Tiny-task scaling is non-monotonic at 8 workers, but the
+effect is no longer visible at the tested 5.3 and 10.7 us workloads. This pass
+does not isolate the mechanism and does not provide evidence for a scheduler
+change.
 
 This threshold is specific to 64 ready, independent, non-yielding tasks and to
 this machine. It is not a portable rule for dependent tasks, I/O work, smaller
@@ -56,9 +60,15 @@ gain is smallest, 5.33 us/task provides the required next stable workload.
 
 The Rapid zero-work diagnostic measured the complete 64-task spawn, schedule,
 and completion path at 12.869 us for one worker (99% Criterion mean interval
-12.540–13.206 us). The matching v0.3 release baseline was 16.814 us for 64 ready
-tasks on one worker. Runtime creation, startup, warm-up, and shutdown are not in
+12.540–13.206 us). Runtime creation, startup, warm-up, and shutdown are not in
 the new measurement.
+
+As historical API-path context, the v0.3 release baseline measured one trivial
+`Priority::Normal` task at 1.0863 us spawn-to-complete on one worker under the
+Balanced power scheme. That path includes task construction, submission,
+scheduling, completion, and caller wait; it is not a pure ready-queue or
+scheduler cost and is not directly comparable with this campaign's 64-task
+High-performance measurement.
 
 The new single-task external-wake diagnostic starts only after the Pending task
 has registered its waker. Its wake-to-complete mean was 11.594 us, with a 99%
@@ -74,21 +84,27 @@ subtracted from the continuously active crossover runs.
 
 Timing alone does not prove a particular task was stolen. Existing `ThreadId`
 and `stolen > 0` diagnostics can prove that cross-worker execution occurred,
-but cannot isolate a per-hop latency. The monotonic scaling above gave no reason
-to add a verified-steal batch diagnostic in this pass.
+but cannot isolate a per-hop latency. The non-monotonic 8-worker tiny-task shape
+could reflect worker activation, queueing, stealing, contention, or OS effects;
+this pass does not attribute it. The effect is no longer observed at the larger
+tested workloads and gives no product evidence for a verified-steal diagnostic
+or a scheduler candidate in this pass.
 
 ## Method and evidence
 
 - Kernel calibration probe: 1,000,000 rounds had a 1,954,200 ns median; frozen
   rounds are 0/1,023/2,559/5,117/10,234/25,586/51,172/102,344 for the Rapid
   0/2/5/10/20/50/100/200 us labels.
-- Rapid: one process, 0.5 s warm-up, 2 s measurement, 20 flat samples, all eight
-  workloads and inline/1/2/4/8 workers. It selected 0/2/5/10 us for Formal.
+- Rapid screening used one process, 0.5 s warm-up, 2 s measurement, 20 flat
+  samples, all eight workloads, and inline/1/2/4/8 workers to select 0/2/5/10 us
+  for Formal. Only the zero-work Rapid evidence was retained in version control.
 - Formal: five processes, 3 s warm-up, 5 s measurement, 100 flat samples, 99%
   confidence, 1% significance, inline plus 2/4/8 workers.
-- The five case orders were fixed and recorded. Four Latin rotations cover each
-  position once; the fifth conservative permutation puts inline first. Mean
-  positions are inline=2.2, workers-2=2.8, workers-4=2.4, workers-8=2.6.
+- The five fixed case permutations were recorded and reduced fixed-position
+  bias, but were not perfectly position-balanced. Mean positions are inline=2.2,
+  workers-2=2.8, workers-4=2.4, workers-8=2.6. Workload order remained fixed at
+  0/2/5/10 us in every process. The clean-round sensitivity check did not change
+  the decision.
 - Formal run ID: `20260907-formal-02`.
 - Source revision before this campaign: `81a2c7a2a646ec3b5a34441893f5b7c17ef5d16e`.
 - Measurement snapshot was dirty because benchmark code and data are delivered
@@ -97,8 +113,8 @@ to add a verified-steal batch diagnostic in this pass.
   final files before commit.
 - Toolchain: `rustc 1.97.0-nightly (507271bc1 2026-05-17)`, target
   `x86_64-pc-windows-msvc`.
-- Machine: AMD Ryzen 7 8845H, 8 physical/16 logical cores, Windows
-  10.0.26200.0, High performance power scheme.
+- Machine: AMD Ryzen 7 8845H, 8 physical/16 logical cores, Windows 11 build
+  26200, High performance power scheme.
 
 Versioned evidence is under
 `benchmarks/results/cpu-crossover/20260907-formal-02/`: only Criterion

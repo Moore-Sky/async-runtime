@@ -1,6 +1,6 @@
 [package]
 name = "async-runtime"
-version = "0.3.4"
+version = "0.3.5"
 edition = "2021"
 rust-version = "1.71"
 license = "Apache-2.0 OR MIT"
@@ -10,6 +10,7 @@ documentation = "https://docs.rs/async-runtime"
 repository = "https://github.com/Moore-Sky/async-runtime"
 keywords = ["async", "executor", "runtime", "priority", "smol"]
 categories = ["asynchronous", "concurrency"]
+exclude = ["/.github/**", "/async-rt-plan.md", "/benchmarks/results/**"]
 
 [package.metadata.docs.rs]
 all-features = true
