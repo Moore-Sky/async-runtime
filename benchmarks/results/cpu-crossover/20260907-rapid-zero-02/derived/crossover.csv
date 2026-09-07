@@ -1,0 +1,4 @@
+"workload","runtime_case","rounds","rounds_runtime_faster","median_speedup","rounds_conservative_lower_gt_1","stable_win"
+"0us","workers-2","1","0","0.00371600704949493","0","False"
+"0us","workers-4","1","0","0.00179276898540187","0","False"
+"0us","workers-8","1","0","0.000457565942626338","0","False"

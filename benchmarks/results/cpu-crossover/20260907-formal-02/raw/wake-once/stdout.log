@@ -1,0 +1,15 @@
+    Finished `bench` profile [optimized] target(s) in 0.32s
+     Running benches\v030_yield_wake_storm.rs (target\release\deps\v030_yield_wake_storm-08f991190e9b6649.exe)
+Gnuplot not found, using plotters backend
+Benchmarking v030/external-wake-storm/1
+Benchmarking v030/external-wake-storm/1: Warming up for 500.00 ms
+Benchmarking v030/external-wake-storm/1: Collecting 20 samples in estimated 8.0000 s (298k iterations)
+Benchmarking v030/external-wake-storm/1: Analyzing
+v030/external-wake-storm/1
+                        time:   [11.463 µs 11.958 µs 12.391 µs]
+                        thrpt:  [80.705 Kelem/s 83.627 Kelem/s 87.241 Kelem/s]
+                 change:
+                        time:   [+1.9860% +6.9774% +12.401%] (p = 0.00 < 0.01)
+                        thrpt:  [-11.033% -6.5223% -1.9473%]
+                        Performance has regressed.
+

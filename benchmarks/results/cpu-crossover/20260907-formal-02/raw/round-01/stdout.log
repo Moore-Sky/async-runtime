@@ -1,0 +1,211 @@
+   Compiling async-runtime v0.3.4 (E:\moyy\program\rust\async-runtime)
+    Finished `bench` profile [optimized] target(s) in 2.56s
+     Running benches\cpu_crossover.rs (target\release\deps\cpu_crossover-79ca7d4db137dab2.exe)
+Gnuplot not found, using plotters backend
+CPU crossover tasks=64; workloads=0us:0,2us:1023,5us:2559,10us:5117; cases=inline,workers-2,workers-4,workers-8
+Benchmarking cpu_crossover/64/0us/inline
+Benchmarking cpu_crossover/64/0us/inline: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/0us/inline: Collecting 100 samples in estimated 5.0000 s (60M iterations)
+Benchmarking cpu_crossover/64/0us/inline: Analyzing
+cpu_crossover/64/0us/inline
+                        time:   [91.424 ns 92.604 ns 93.624 ns]
+                        thrpt:  [683.59 Melem/s 691.11 Melem/s 700.03 Melem/s]
+                 change:
+                        time:   [+4.5012% +5.9837% +7.2335%] (p = 0.00 < 0.01)
+                        thrpt:  [-6.7456% -5.6459% -4.3073%]
+                        Performance has regressed.
+Found 4 outliers among 100 measurements (4.00%)
+  1 (1.00%) low severe
+  3 (3.00%) low mild
+Benchmarking cpu_crossover/64/0us/workers-2
+Benchmarking cpu_crossover/64/0us/workers-2: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/0us/workers-2: Collecting 100 samples in estimated 5.0008 s (255k iterations)
+Benchmarking cpu_crossover/64/0us/workers-2: Analyzing
+cpu_crossover/64/0us/workers-2
+                        time:   [19.509 µs 19.788 µs 20.063 µs]
+                        thrpt:  [3.1900 Melem/s 3.2343 Melem/s 3.2805 Melem/s]
+                 change:
+                        time:   [-2.6902% +0.2698% +3.4884%] (p = 0.82 > 0.01)
+                        thrpt:  [-3.3708% -0.2691% +2.7645%]
+                        No change in performance detected.
+Benchmarking cpu_crossover/64/0us/workers-4
+Benchmarking cpu_crossover/64/0us/workers-4: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/0us/workers-4: Collecting 100 samples in estimated 5.0019 s (125k iterations)
+Benchmarking cpu_crossover/64/0us/workers-4: Analyzing
+cpu_crossover/64/0us/workers-4
+                        time:   [40.041 µs 40.299 µs 40.569 µs]
+                        thrpt:  [1.5776 Melem/s 1.5881 Melem/s 1.5984 Melem/s]
+                 change:
+                        time:   [-6.9042% -5.8879% -4.8685%] (p = 0.00 < 0.01)
+                        thrpt:  [+5.1177% +6.2562% +7.4162%]
+                        Performance has improved.
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high mild
+Benchmarking cpu_crossover/64/0us/workers-8
+Benchmarking cpu_crossover/64/0us/workers-8: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/0us/workers-8: Collecting 100 samples in estimated 5.0095 s (31k iterations)
+Benchmarking cpu_crossover/64/0us/workers-8: Analyzing
+cpu_crossover/64/0us/workers-8
+                        time:   [163.18 µs 163.99 µs 164.80 µs]
+                        thrpt:  [388.34 Kelem/s 390.26 Kelem/s 392.21 Kelem/s]
+                 change:
+                        time:   [+0.8047% +1.8633% +2.9023%] (p = 0.00 < 0.01)
+                        thrpt:  [-2.8204% -1.8292% -0.7983%]
+                        Change within noise threshold.
+
+Benchmarking cpu_crossover/64/2us/inline
+Benchmarking cpu_crossover/64/2us/inline: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/2us/inline: Collecting 100 samples in estimated 5.0105 s (37k iterations)
+Benchmarking cpu_crossover/64/2us/inline: Analyzing
+cpu_crossover/64/2us/inline
+                        time:   [135.24 µs 135.94 µs 136.62 µs]
+                        thrpt:  [468.44 Kelem/s 470.81 Kelem/s 473.24 Kelem/s]
+                 change:
+                        time:   [-0.9335% -0.2968% +0.3917%] (p = 0.26 > 0.01)
+                        thrpt:  [-0.3902% +0.2977% +0.9423%]
+                        No change in performance detected.
+Benchmarking cpu_crossover/64/2us/workers-2
+Benchmarking cpu_crossover/64/2us/workers-2: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/2us/workers-2: Collecting 100 samples in estimated 5.0010 s (63k iterations)
+Benchmarking cpu_crossover/64/2us/workers-2: Analyzing
+cpu_crossover/64/2us/workers-2
+                        time:   [79.239 µs 79.512 µs 79.806 µs]
+                        thrpt:  [801.95 Kelem/s 804.91 Kelem/s 807.68 Kelem/s]
+                 change:
+                        time:   [-1.1467% -0.6801% -0.2018%] (p = 0.00 < 0.01)
+                        thrpt:  [+0.2022% +0.6848% +1.1600%]
+                        Change within noise threshold.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+Benchmarking cpu_crossover/64/2us/workers-4
+Benchmarking cpu_crossover/64/2us/workers-4: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/2us/workers-4: Collecting 100 samples in estimated 5.0049 s (102k iterations)
+Benchmarking cpu_crossover/64/2us/workers-4: Analyzing
+cpu_crossover/64/2us/workers-4
+                        time:   [49.097 µs 49.431 µs 49.828 µs]
+                        thrpt:  [1.2844 Melem/s 1.2947 Melem/s 1.3036 Melem/s]
+                 change:
+                        time:   [-1.2335% -0.2279% +0.7587%] (p = 0.56 > 0.01)
+                        thrpt:  [-0.7530% +0.2284% +1.2489%]
+                        No change in performance detected.
+Found 9 outliers among 100 measurements (9.00%)
+  4 (4.00%) high mild
+  5 (5.00%) high severe
+Benchmarking cpu_crossover/64/2us/workers-8
+Benchmarking cpu_crossover/64/2us/workers-8: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/2us/workers-8: Collecting 100 samples in estimated 5.0004 s (39k iterations)
+Benchmarking cpu_crossover/64/2us/workers-8: Analyzing
+cpu_crossover/64/2us/workers-8
+                        time:   [126.12 µs 127.06 µs 127.99 µs]
+                        thrpt:  [500.04 Kelem/s 503.69 Kelem/s 507.44 Kelem/s]
+                 change:
+                        time:   [+4.5470% +5.7599% +6.9239%] (p = 0.00 < 0.01)
+                        thrpt:  [-6.4755% -5.4462% -4.3492%]
+                        Performance has regressed.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) low mild
+
+Benchmarking cpu_crossover/64/5us/inline
+Benchmarking cpu_crossover/64/5us/inline: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/5us/inline: Collecting 100 samples in estimated 5.0164 s (15k iterations)
+Benchmarking cpu_crossover/64/5us/inline: Analyzing
+cpu_crossover/64/5us/inline
+                        time:   [339.02 µs 340.62 µs 342.19 µs]
+                        thrpt:  [187.03 Kelem/s 187.89 Kelem/s 188.78 Kelem/s]
+                 change:
+                        time:   [-0.9962% -0.3437% +0.3227%] (p = 0.19 > 0.01)
+                        thrpt:  [-0.3217% +0.3448% +1.0062%]
+                        No change in performance detected.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) low mild
+Benchmarking cpu_crossover/64/5us/workers-2
+Benchmarking cpu_crossover/64/5us/workers-2: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/5us/workers-2: Collecting 100 samples in estimated 5.0008 s (24k iterations)
+Benchmarking cpu_crossover/64/5us/workers-2: Analyzing
+cpu_crossover/64/5us/workers-2
+                        time:   [209.41 µs 210.22 µs 211.06 µs]
+                        thrpt:  [303.23 Kelem/s 304.44 Kelem/s 305.61 Kelem/s]
+                 change:
+                        time:   [-1.8508% -1.3169% -0.7564%] (p = 0.00 < 0.01)
+                        thrpt:  [+0.7622% +1.3345% +1.8857%]
+                        Change within noise threshold.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+Benchmarking cpu_crossover/64/5us/workers-4
+Benchmarking cpu_crossover/64/5us/workers-4: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/5us/workers-4: Collecting 100 samples in estimated 5.0117 s (43k iterations)
+Benchmarking cpu_crossover/64/5us/workers-4: Analyzing
+cpu_crossover/64/5us/workers-4
+                        time:   [116.10 µs 116.46 µs 116.84 µs]
+                        thrpt:  [547.75 Kelem/s 549.52 Kelem/s 551.27 Kelem/s]
+                 change:
+                        time:   [-1.1707% -0.7003% -0.2542%] (p = 0.00 < 0.01)
+                        thrpt:  [+0.2549% +0.7053% +1.1846%]
+                        Change within noise threshold.
+Benchmarking cpu_crossover/64/5us/workers-8
+Benchmarking cpu_crossover/64/5us/workers-8: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/5us/workers-8: Collecting 100 samples in estimated 5.0009 s (65k iterations)
+Benchmarking cpu_crossover/64/5us/workers-8: Analyzing
+cpu_crossover/64/5us/workers-8
+                        time:   [76.697 µs 76.948 µs 77.256 µs]
+                        thrpt:  [828.42 Kelem/s 831.73 Kelem/s 834.46 Kelem/s]
+                 change:
+                        time:   [-2.7014% -2.1447% -1.5482%] (p = 0.00 < 0.01)
+                        thrpt:  [+1.5725% +2.1917% +2.7764%]
+                        Performance has improved.
+Found 7 outliers among 100 measurements (7.00%)
+  2 (2.00%) high mild
+  5 (5.00%) high severe
+
+Benchmarking cpu_crossover/64/10us/inline
+Benchmarking cpu_crossover/64/10us/inline: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/10us/inline: Collecting 100 samples in estimated 5.0490 s (7400 iterations)
+Benchmarking cpu_crossover/64/10us/inline: Analyzing
+cpu_crossover/64/10us/inline
+                        time:   [676.44 µs 679.57 µs 682.73 µs]
+                        thrpt:  [93.741 Kelem/s 94.177 Kelem/s 94.613 Kelem/s]
+                 change:
+                        time:   [-1.5223% -0.9250% -0.2792%] (p = 0.00 < 0.01)
+                        thrpt:  [+0.2800% +0.9336% +1.5459%]
+                        Change within noise threshold.
+Benchmarking cpu_crossover/64/10us/workers-2
+Benchmarking cpu_crossover/64/10us/workers-2: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/10us/workers-2: Collecting 100 samples in estimated 5.0232 s (12k iterations)
+Benchmarking cpu_crossover/64/10us/workers-2: Analyzing
+cpu_crossover/64/10us/workers-2
+                        time:   [403.71 µs 405.09 µs 406.50 µs]
+                        thrpt:  [157.44 Kelem/s 157.99 Kelem/s 158.53 Kelem/s]
+                 change:
+                        time:   [-0.7769% -0.3378% +0.1058%] (p = 0.06 > 0.01)
+                        thrpt:  [-0.1057% +0.3390% +0.7830%]
+                        No change in performance detected.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+Benchmarking cpu_crossover/64/10us/workers-4
+Benchmarking cpu_crossover/64/10us/workers-4: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/10us/workers-4: Collecting 100 samples in estimated 5.0137 s (23k iterations)
+Benchmarking cpu_crossover/64/10us/workers-4: Analyzing
+cpu_crossover/64/10us/workers-4
+                        time:   [214.40 µs 215.10 µs 215.86 µs]
+                        thrpt:  [296.49 Kelem/s 297.53 Kelem/s 298.51 Kelem/s]
+                 change:
+                        time:   [-0.4269% +0.0359% +0.4790%] (p = 0.84 > 0.01)
+                        thrpt:  [-0.4767% -0.0359% +0.4287%]
+                        No change in performance detected.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+Benchmarking cpu_crossover/64/10us/workers-8
+Benchmarking cpu_crossover/64/10us/workers-8: Warming up for 3.0000 s
+Benchmarking cpu_crossover/64/10us/workers-8: Collecting 100 samples in estimated 5.0126 s (39k iterations)
+Benchmarking cpu_crossover/64/10us/workers-8: Analyzing
+cpu_crossover/64/10us/workers-8
+                        time:   [127.78 µs 128.05 µs 128.37 µs]
+                        thrpt:  [498.55 Kelem/s 499.81 Kelem/s 500.86 Kelem/s]
+                 change:
+                        time:   [+0.0110% +0.3030% +0.6114%] (p = 0.01 < 0.01)
+                        thrpt:  [-0.6077% -0.3021% -0.0110%]
+                        Change within noise threshold.
+Found 6 outliers among 100 measurements (6.00%)
+  5 (5.00%) high mild
+  1 (1.00%) high severe
+

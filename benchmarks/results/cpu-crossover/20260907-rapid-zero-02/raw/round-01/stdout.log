@@ -1,0 +1,60 @@
+    Finished `bench` profile [optimized] target(s) in 0.33s
+     Running benches\cpu_crossover.rs (target\release\deps\cpu_crossover-79ca7d4db137dab2.exe)
+Gnuplot not found, using plotters backend
+CPU crossover tasks=64; workloads=0us:0; cases=inline,workers-1,workers-2,workers-4,workers-8
+Benchmarking cpu_crossover/64/0us/inline
+Benchmarking cpu_crossover/64/0us/inline: Warming up for 500.00 ms
+Benchmarking cpu_crossover/64/0us/inline: Collecting 20 samples in estimated 2.0000 s (27M iterations)
+Benchmarking cpu_crossover/64/0us/inline: Analyzing
+cpu_crossover/64/0us/inline
+                        time:   [72.976 ns 73.513 ns 74.161 ns]
+                        thrpt:  [862.99 Melem/s 870.59 Melem/s 877.00 Melem/s]
+                 change:
+                        time:   [-21.730% -20.636% -19.426%] (p = 0.00 < 0.01)
+                        thrpt:  [+24.110% +26.002% +27.763%]
+                        Performance has improved.
+Benchmarking cpu_crossover/64/0us/workers-1
+Benchmarking cpu_crossover/64/0us/workers-1: Warming up for 500.00 ms
+Benchmarking cpu_crossover/64/0us/workers-1: Collecting 20 samples in estimated 2.0001 s (151k iterations)
+Benchmarking cpu_crossover/64/0us/workers-1: Analyzing
+cpu_crossover/64/0us/workers-1
+                        time:   [12.540 µs 12.869 µs 13.206 µs]
+                        thrpt:  [4.8464 Melem/s 4.9730 Melem/s 5.1035 Melem/s]
+                 change:
+                        time:   [-8.6829% -4.5315% -0.1528%] (p = 0.02 > 0.01)
+                        thrpt:  [+0.1530% +4.7466% +9.5085%]
+                        No change in performance detected.
+Benchmarking cpu_crossover/64/0us/workers-2
+Benchmarking cpu_crossover/64/0us/workers-2: Warming up for 500.00 ms
+Benchmarking cpu_crossover/64/0us/workers-2: Collecting 20 samples in estimated 2.0001 s (102k iterations)
+Benchmarking cpu_crossover/64/0us/workers-2: Analyzing
+cpu_crossover/64/0us/workers-2
+                        time:   [19.132 µs 19.783 µs 20.402 µs]
+                        thrpt:  [3.1369 Melem/s 3.2351 Melem/s 3.3452 Melem/s]
+                 change:
+                        time:   [-16.981% -14.287% -11.141%] (p = 0.00 < 0.01)
+                        thrpt:  [+12.538% +16.668% +20.454%]
+                        Performance has improved.
+Benchmarking cpu_crossover/64/0us/workers-4
+Benchmarking cpu_crossover/64/0us/workers-4: Warming up for 500.00 ms
+Benchmarking cpu_crossover/64/0us/workers-4: Collecting 20 samples in estimated 2.0002 s (48k iterations)
+Benchmarking cpu_crossover/64/0us/workers-4: Analyzing
+cpu_crossover/64/0us/workers-4
+                        time:   [40.640 µs 41.005 µs 41.411 µs]
+                        thrpt:  [1.5455 Melem/s 1.5608 Melem/s 1.5748 Melem/s]
+                 change:
+                        time:   [-5.0143% -4.0039% -2.8813%] (p = 0.00 < 0.01)
+                        thrpt:  [+2.9668% +4.1709% +5.2790%]
+                        Performance has improved.
+Benchmarking cpu_crossover/64/0us/workers-8
+Benchmarking cpu_crossover/64/0us/workers-8: Warming up for 500.00 ms
+Benchmarking cpu_crossover/64/0us/workers-8: Collecting 20 samples in estimated 2.0025 s (12k iterations)
+Benchmarking cpu_crossover/64/0us/workers-8: Analyzing
+cpu_crossover/64/0us/workers-8
+                        time:   [159.45 µs 160.66 µs 161.87 µs]
+                        thrpt:  [395.39 Kelem/s 398.35 Kelem/s 401.39 Kelem/s]
+                 change:
+                        time:   [-1.8738% -0.9320% -0.0521%] (p = 0.02 > 0.01)
+                        thrpt:  [+0.0522% +0.9408% +1.9096%]
+                        No change in performance detected.
+

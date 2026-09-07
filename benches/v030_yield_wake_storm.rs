@@ -15,6 +15,7 @@ use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
 
 const TASKS: [usize; 3] = [200, 1_000, 10_000];
+const WAKE_TASKS: [usize; 4] = [1, 200, 1_000, 10_000];
 const YIELDS: usize = 8;
 
 struct ManualWake {
@@ -86,7 +87,7 @@ fn yield_and_wake_storm(c: &mut Criterion) {
 
     let mut wakes = c.benchmark_group("v030/external-wake-storm");
     wakes.measurement_time(Duration::from_secs(8));
-    for tasks in TASKS {
+    for tasks in WAKE_TASKS {
         wakes.throughput(Throughput::Elements(tasks as u64));
         wakes.bench_with_input(BenchmarkId::from_parameter(tasks), &tasks, |b, &tasks| {
             b.iter_custom(|iterations| {

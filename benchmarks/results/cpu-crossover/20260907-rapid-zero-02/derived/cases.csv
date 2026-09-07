@@ -1,0 +1,6 @@
+"round","benchmark_id","workload","case","mean_ns","mean_ci_lower_ns","mean_ci_upper_ns"
+"round-01","cpu_crossover/64/0us/inline","0us","inline","73.51327057776619","72.9758595557673","74.16087649557572"
+"round-01","cpu_crossover/64/0us/workers-1","0us","workers-1","12869.475185774947","12540.439065817409","13205.757895435243"
+"round-01","cpu_crossover/64/0us/workers-2","0us","workers-2","19782.866285939344","19132.146770382038","20402.460584875942"
+"round-01","cpu_crossover/64/0us/workers-4","0us","workers-4","41005.43415039468","40640.33618612381","41411.495689655174"
+"round-01","cpu_crossover/64/0us/workers-8","0us","workers-8","160661.58717105264","159445.32874177635","161866.3988075658"

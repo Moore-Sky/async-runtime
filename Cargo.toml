@@ -107,3 +107,7 @@ harness = false
 [[bench]]
 name = "v030_local_budget_latency"
 harness = false
+
+[[bench]]
+name = "cpu_crossover"
+harness = false

@@ -1,0 +1,66 @@
+{
+  "captured_at": "2026-09-07T19:15:46.8255404+09:00",
+  "run_id": "20260907-formal-02",
+  "mode": "Formal",
+  "round": 5,
+  "workloads": [
+    "0us",
+    "2us",
+    "5us",
+    "10us"
+  ],
+  "case_order": [
+    "inline",
+    "workers-4",
+    "workers-8",
+    "workers-2"
+  ],
+  "case_order_seed": "0xA57C20260907CA5E",
+  "case_position_means": {
+    "inline": 2.2,
+    "workers_4": 2.4,
+    "workers_2": 2.8,
+    "workers_8": 2.6
+  },
+  "command": [
+    "cargo",
+    "bench",
+    "--locked",
+    "--bench",
+    "cpu_crossover",
+    "--",
+    "--warm-up-time",
+    "3",
+    "--measurement-time",
+    "5",
+    "--sample-size",
+    "100",
+    "--confidence-level",
+    "0.99",
+    "--significance-level",
+    "0.01",
+    "--noplot"
+  ],
+  "commit": "81a2c7a2a646ec3b5a34441893f5b7c17ef5d16e",
+  "working_tree": "M Cargo.toml\r\n M benches/v030_yield_wake_storm.rs\r\n?? async-rt-plan.md\r\n?? benches/cpu_crossover.rs\r\n?? benchmarks/results/\r\n?? benchmarks/run-cpu-crossover.ps1",
+  "cargo_lock_sha256": "419E9B2A160B1F4190AA1F2446C28113AC22E084812400F2396654AC8B94C202",
+  "rustc_vv": "rustc 1.97.0-nightly (507271bc1 2026-05-17)\r\nbinary: rustc\r\ncommit-hash: 507271bc119683008ec719ecee48814e8ac86c65\r\ncommit-date: 2026-05-17\r\nhost: x86_64-pc-windows-msvc\r\nrelease: 1.97.0-nightly\r\nLLVM version: 22.1.4",
+  "target": null,
+  "os": "Microsoft Windows NT 10.0.26200.0",
+  "processor": "AMD Ryzen 7 8845H w/ Radeon 780M Graphics",
+  "physical_cores": 8.0,
+  "logical_processors": 16.0,
+  "power_scheme": "电源方案 GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (高性能)",
+  "flags": {
+    "async_runtime_cpu_workloads": "0us,2us,5us,10us",
+    "async_runtime_cpu_case_order": "inline,workers-4,workers-8,workers-2",
+    "async_runtime_cpu_bench_mode": "formal",
+    "cargo_target_dir": "E:\\moyy\\program\\rust\\async-runtime\\target"
+  },
+  "source_sha256": {
+    "wake_benchmark": "DD4408558B5022EC0C4C04866FCA5212CB8FAE5911FA922BA45BFAB63E1AC119",
+    "cargo_toml": "E3BB499DEB200B736C24937A2AE3D3035ECEB32B8B1CCAB42E300AE3F5C81E3A",
+    "runner": "DD08A2AD8E0A907200213B0E6A222710C9EDFE5AD75DDF31477384DCA0A48C3E",
+    "cpu_crossover": "D7674F32E666BFE44736A0CCF6233B633119293CDD0A08597BB3626DF951D4E1"
+  }
+}
