@@ -142,7 +142,27 @@ impl LocalDomain {
         }
     }
 
-    /// Spawns a future that is allowed to borrow only this local thread's affinity.
+    /// Spawns a thread-affine future on this domain's owner thread.
+    ///
+    /// The future may own `!Send` state such as [`Rc`] and [`RefCell`], but it
+    /// must be `'static`; unlike [`Self::run`], it cannot borrow a stack local.
+    /// Use `async move` to transfer owned local state into the future:
+    ///
+    /// ```
+    /// use async_runtime::LocalDomain;
+    /// use std::cell::RefCell;
+    /// use std::rc::Rc;
+    ///
+    /// let domain = LocalDomain::new();
+    /// let state = Rc::new(RefCell::new(0));
+    /// let state_for_task = Rc::clone(&state);
+    /// domain
+    ///     .spawn_local(async move { *state_for_task.borrow_mut() += 1 })?
+    ///     .detach();
+    /// while domain.try_tick() {}
+    /// assert_eq!(*state.borrow(), 1);
+    /// # Ok::<(), async_runtime::SpawnError>(())
+    /// ```
     ///
     /// # Errors
     ///

@@ -8,9 +8,8 @@ driving and lightweight cross-thread dispatch.
 
 ```rust,no_run
 use async_runtime::{Priority, RuntimeBuilder};
-use std::num::NonZeroUsize;
 
-let runtime = RuntimeBuilder::new(NonZeroUsize::new(4).unwrap()).build()?;
+let runtime = RuntimeBuilder::available_parallelism()?.build()?;
 runtime.spawn(Priority::High, async { /* Send work */ })?.detach();
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
@@ -79,8 +78,7 @@ async-runtime = { version = "0.3", features = ["stats"] }
 
 ```rust,no_run
 # use async_runtime::RuntimeBuilder;
-# use std::num::NonZeroUsize;
-let runtime = RuntimeBuilder::new(NonZeroUsize::new(2).unwrap()).build()?;
+let runtime = RuntimeBuilder::available_parallelism()?.build()?;
 let stats = runtime.stats();
 println!("workers={}, executed={}", stats.workers, stats.executed);
 # runtime.shutdown_now()?;

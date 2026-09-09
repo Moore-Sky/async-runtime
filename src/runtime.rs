@@ -12,12 +12,29 @@ use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::thread::{self, JoinHandle, ThreadId};
 use std::time::Duration;
 
+/// Configures and starts a [`Runtime`].
+///
+/// The builder owns configuration only; [`Self::build`] creates the worker
+/// threads and transfers their ownership to the returned runtime.
 pub struct RuntimeBuilder {
     worker_threads: NonZeroUsize,
     weights: PriorityWeights,
 }
 
 impl RuntimeBuilder {
+    /// Creates a builder using the operating system's available parallelism.
+    ///
+    /// This is the convenient default for most applications. Use [`Self::new`]
+    /// when the worker count is part of the application's explicit policy.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if the operating system cannot determine the
+    /// available parallelism.
+    pub fn available_parallelism() -> io::Result<Self> {
+        Ok(Self::new(thread::available_parallelism()?))
+    }
+
     /// Creates a builder for an explicit, non-zero worker count.
     pub fn new(worker_threads: NonZeroUsize) -> Self {
         Self {
@@ -76,6 +93,10 @@ impl RuntimeBuilder {
     }
 }
 
+/// Owns a general-purpose worker pool and its task lifecycle.
+///
+/// Dropping this handle stops its workers. Obtain a [`Spawner`] when work must
+/// be submitted without extending the runtime's ownership.
 pub struct Runtime {
     pub(crate) state: Arc<RuntimeState>,
     workers: Mutex<Vec<JoinHandle<()>>>,
@@ -223,6 +244,10 @@ impl Drop for Runtime {
 }
 
 #[derive(Clone)]
+/// A cloneable, non-owning capability for submitting work to a [`Runtime`].
+///
+/// A spawner does not keep the runtime alive; submissions fail after the
+/// runtime is dropped or begins shutting down.
 pub struct Spawner {
     state: Weak<RuntimeState>,
 }
@@ -456,6 +481,13 @@ mod tests {
         RuntimeBuilder::new(NonZeroUsize::new(1).expect("non-zero worker count"))
             .build()
             .expect("runtime builds")
+    }
+
+    #[test]
+    fn available_parallelism_creates_a_non_zero_builder() {
+        let builder = RuntimeBuilder::available_parallelism()
+            .expect("operating system reports available parallelism");
+        assert!(builder.worker_threads.get() > 0);
     }
 
     fn wait_until_not_running(state: &super::RuntimeState) {
